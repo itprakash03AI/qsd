@@ -1,0 +1,2554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QueryStudio — OpenShift Release Plan v2.1.0</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#f5f7fa;color:#1a1a2e;line-height:1.6}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────── */
+.sidebar{position:fixed;top:0;left:0;width:280px;height:100vh;background:linear-gradient(180deg,#1b2838 0%,#2c3e50 100%);color:#fff;overflow-y:auto;z-index:100;padding:24px 0 32px}
+.sidebar .logo{padding:14px 20px 18px;border-bottom:1px solid rgba(255,255,255,.15);margin-bottom:8px}
+.sidebar .logo h2{font-size:17px;font-weight:700;letter-spacing:.5px}
+.sidebar .logo span{font-size:11px;opacity:.55}
+.sidebar h3{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:rgba(255,255,255,.4);padding:14px 20px 6px}
+.sidebar ul{list-style:none}
+.sidebar li a{display:block;padding:6px 20px 6px 24px;color:rgba(255,255,255,.8);text-decoration:none;font-size:13px;border-left:3px solid transparent;transition:.15s}
+.sidebar li a:hover{background:rgba(255,255,255,.08);border-left-color:#3498db;color:#fff}
+.sidebar li a.active{background:rgba(255,255,255,.1);border-left-color:#3498db;color:#fff}
+.sidebar li a .badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:6px;font-weight:600}
+.badge-critical{background:#e74c3c;color:#fff}
+.badge-ready{background:#27ae60;color:#fff}
+.badge-todo{background:#e67e22;color:#fff}
+.badge-info{background:#3498db;color:#fff}
+
+/* ── Main ────────────────────────────────────────────────────────────── */
+.main{margin-left:280px;padding:0}
+
+/* ── Hero ────────────────────────────────────────────────────────────── */
+.hero{background:linear-gradient(135deg,#0d47a1 0%,#1565c0 40%,#1976d2 100%);color:#fff;padding:44px 48px 36px;position:relative;overflow:hidden}
+.hero::after{content:'';position:absolute;right:-80px;top:-80px;width:350px;height:350px;border-radius:50%;background:rgba(255,255,255,.04)}
+.hero h1{font-size:30px;font-weight:800;margin-bottom:6px}
+.hero p{font-size:14px;opacity:.85;max-width:700px}
+.hero .meta{margin-top:12px;display:flex;gap:20px;font-size:12px;opacity:.6;flex-wrap:wrap}
+.hero .version-badge{display:inline-block;background:rgba(255,255,255,.2);padding:3px 14px;border-radius:20px;font-size:13px;font-weight:600;margin-left:12px;vertical-align:middle}
+
+/* ── Stats Bar ───────────────────────────────────────────────────────── */
+.stats-bar{display:flex;gap:16px;padding:20px 48px;background:#fff;border-bottom:1px solid #e0e4e8;flex-wrap:wrap}
+.stat{text-align:center;padding:14px 24px;border-radius:8px;background:#f8f9fb;border:1px solid #e8ecf0;min-width:130px}
+.stat .num{font-size:28px;font-weight:800;line-height:1.1}
+.stat .label{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:#888;margin-top:2px}
+.stat.pods .num{color:#1976d2}
+.stat.storage .num{color:#7b1fa2}
+.stat.tests .num{color:#2e7d32}
+.stat.steps .num{color:#e65100}
+.stat.services .num{color:#00838f}
+
+/* ── Search ──────────────────────────────────────────────────────────── */
+.search-bar{padding:16px 48px;background:#fff;border-bottom:1px solid #e0e4e8}
+.search-bar input{width:100%;max-width:500px;padding:10px 16px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none;transition:.2s}
+.search-bar input:focus{border-color:#3498db;box-shadow:0 0 0 3px rgba(52,152,219,.15)}
+
+/* ── Section Entry ────────────────────────────────────────────────────── */
+.sections{padding:24px 48px 48px}
+.section-group{margin-bottom:32px}
+.section-group h2{font-size:20px;font-weight:700;color:#1b2838;margin-bottom:4px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.section-group h2 .type-badge{font-size:11px;padding:2px 10px;border-radius:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.type-critical{background:#ffebee;color:#c62828}
+.type-config{background:#e3f2fd;color:#1565c0}
+.type-infra{background:#e8f5e9;color:#2e7d32}
+.type-deploy{background:#f3e5f5;color:#7b1fa2}
+.type-verify{background:#fff3e0;color:#e65100}
+.type-ops{background:#e0f2f1;color:#00695c}
+.type-fix{background:#fce4ec;color:#c62828}
+.section-group .date{font-size:12px;color:#999;margin-bottom:16px}
+.section-group .summary{font-size:14px;color:#444;margin-bottom:16px;max-width:800px;line-height:1.7}
+
+.step-item{background:#fff;border:1px solid #e0e4e8;border-radius:10px;margin-bottom:12px;overflow:hidden}
+.step-item .header{padding:14px 20px;display:flex;align-items:center;gap:12px;cursor:pointer;user-select:none;transition:.15s}
+.step-item .header:hover{background:#f8f9fb}
+.step-item .header .file{font-family:'Cascadia Code','Fira Code',monospace;font-size:13px;color:#1565c0;font-weight:600;flex:1}
+.step-item .header .action{font-size:11px;padding:2px 8px;border-radius:6px;font-weight:600}
+.action-run{background:#e8f5e9;color:#2e7d32}
+.action-config{background:#e3f2fd;color:#1565c0}
+.action-verify{background:#fff3e0;color:#e65100}
+.action-critical{background:#ffebee;color:#c62828}
+.action-manual{background:#f3e5f5;color:#7b1fa2}
+.action-done{background:#e8f5e9;color:#2e7d32}
+
+.step-item .detail{display:none;padding:0 20px 16px;border-top:1px solid #f0f0f0}
+.step-item.open .detail{display:block}
+.step-item .header .arrow{transition:transform .2s;color:#aaa;font-size:12px}
+.step-item.open .header .arrow{transform:rotate(90deg)}
+
+.reason{font-size:13px;color:#555;margin:12px 0;padding:10px 14px;background:#f8f9fb;border-left:3px solid #3498db;border-radius:0 6px 6px 0}
+.warning{font-size:13px;color:#b71c1c;margin:12px 0;padding:10px 14px;background:#fff5f5;border-left:3px solid #e74c3c;border-radius:0 6px 6px 0}
+.success{font-size:13px;color:#1b5e20;margin:12px 0;padding:10px 14px;background:#f1f8e9;border-left:3px solid #27ae60;border-radius:0 6px 6px 0}
+
+.diff-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin:10px 0 6px;display:flex;align-items:center;gap:6px}
+.diff-label.before{color:#c62828}
+.diff-label.before::before{content:'';display:inline-block;width:10px;height:10px;background:#ffcdd2;border-radius:2px}
+.diff-label.after{color:#2e7d32}
+.diff-label.after::before{content:'';display:inline-block;width:10px;height:10px;background:#c8e6c9;border-radius:2px}
+.diff-label.cmd{color:#1565c0}
+.diff-label.cmd::before{content:'';display:inline-block;width:10px;height:10px;background:#bbdefb;border-radius:2px}
+.diff-label.yaml{color:#7b1fa2}
+.diff-label.yaml::before{content:'';display:inline-block;width:10px;height:10px;background:#e1bee7;border-radius:2px}
+.diff-label.output{color:#00695c}
+.diff-label.output::before{content:'';display:inline-block;width:10px;height:10px;background:#b2dfdb;border-radius:2px}
+
+pre.code{font-family:'Cascadia Code','Fira Code',monospace;font-size:12px;line-height:1.6;padding:12px 16px;border-radius:6px;overflow-x:auto;white-space:pre;tab-size:4;margin:0 0 8px}
+pre.code.before{background:#fff5f5;border:1px solid #ffcdd2;color:#b71c1c}
+pre.code.after{background:#f1f8e9;border:1px solid #c8e6c9;color:#1b5e20}
+pre.code.cmd{background:#e3f2fd;border:1px solid #90caf9;color:#0d47a1}
+pre.code.yaml{background:#f3e5f5;border:1px solid #e1bee7;color:#4a148c}
+pre.code.output{background:#e0f2f1;border:1px solid #80cbc4;color:#004d40}
+pre.code.new-file{background:#f3e5f5;border:1px solid #e1bee7;color:#4a148c}
+
+/* ── Architecture Diagram ──────────────────────────────────────────── */
+.arch-diagram{background:#1a1a2e;color:#66bb6a;font-family:'Cascadia Code','Fira Code',monospace;font-size:12px;line-height:1.5;padding:20px 24px;border-radius:10px;overflow-x:auto;margin:16px 0;white-space:pre}
+
+/* ── Checklist ─────────────────────────────────────────────────────── */
+.checklist{margin:12px 0;padding:0}
+.checklist li{list-style:none;padding:6px 0;font-size:13px;display:flex;align-items:flex-start;gap:8px}
+.checklist li::before{content:'';display:inline-block;width:16px;height:16px;border:2px solid #bbb;border-radius:3px;flex-shrink:0;margin-top:2px}
+.checklist li.done::before{background:#27ae60;border-color:#27ae60;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2.5-2.5a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3E%3C/svg%3E");background-size:12px;background-position:center;background-repeat:no-repeat}
+.checklist li.todo::before{border-color:#e67e22}
+
+/* ── Tables ────────────────────────────────────────────────────────── */
+table.info{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px}
+table.info th{background:#f0f4f8;text-align:left;padding:8px 12px;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#555;border-bottom:2px solid #e0e4e8}
+table.info td{padding:8px 12px;border-bottom:1px solid #f0f0f0;vertical-align:top}
+table.info tr:hover td{background:#f8f9fb}
+table.info code{font-family:'Cascadia Code','Fira Code',monospace;font-size:12px;background:#f0f4f8;padding:1px 6px;border-radius:3px}
+table.info .tag{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600}
+.tag-critical{background:#ffebee;color:#c62828}
+.tag-required{background:#e3f2fd;color:#1565c0}
+.tag-optional{background:#f0f0f0;color:#888}
+.tag-done{background:#e8f5e9;color:#2e7d32}
+
+/* ── Step Numbers ──────────────────────────────────────────────────── */
+.step-num{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;background:#1976d2;color:#fff;border-radius:50%;font-size:13px;font-weight:700;flex-shrink:0}
+
+/* ── Responsive ──────────────────────────────────────────────────────── */
+@media(max-width:900px){
+  .sidebar{display:none}
+  .main{margin-left:0}
+  .hero,.stats-bar,.search-bar,.sections{padding-left:20px;padding-right:20px}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════ SIDEBAR ═══════════════════════ -->
+<div class="sidebar">
+  <div class="logo">
+    <h2>Release Plan</h2>
+    <span>QueryStudio v2.1.0 — OpenShift</span>
+  </div>
+
+  <h3>This Release</h3>
+  <ul>
+    <li><a href="#rel-2026-08-19">2026-08-19 Incident Fixes <span class="badge badge-critical">NEW</span></a></li>
+    <li><a href="#rel-starburst-parity">Starburst / Trino Parity <span class="badge badge-critical">NEW</span></a></li>
+    <li><a href="#rel-rls">Row Security <span class="badge badge-critical">NEW</span></a></li>
+    <li><a href="#rel-cross-connector">Cross-Connector Audit <span class="badge badge-critical">NEW</span></a></li>
+    <li><a href="#rel-components">One Image, Six Components <span class="badge badge-critical">NEW</span></a></li>
+    <li><a href="#rel-local-api-mode">Running Locally (API mode) <span class="badge badge-todo">TEST</span></a></li>
+    <li><a href="#rel-action-required">Action Required <span class="badge badge-todo">ACT</span></a></li>
+  </ul>
+
+  <h3>Pre-Deploy</h3>
+  <ul>
+    <li><a href="#checklist">Pre-Deployment Checklist <span class="badge badge-todo">TODO</span></a></li>
+    <li><a href="#architecture">Architecture Overview</a></li>
+    <li><a href="#prod-gaps">Critical Fixes <span class="badge badge-critical">FIX</span></a></li>
+  </ul>
+
+  <h3>Build &amp; Push</h3>
+  <ul>
+    <li><a href="#docker-build">Docker Image Build</a></li>
+    <li><a href="#registry-push">Registry Push</a></li>
+  </ul>
+
+  <h3>OpenShift Setup</h3>
+  <ul>
+    <li><a href="#project-setup">Project &amp; SCC</a></li>
+    <li><a href="#storage">Storage (PVC / NFS)</a></li>
+    <li><a href="#secrets">Secrets</a></li>
+    <li><a href="#configmap">ConfigMap</a></li>
+  </ul>
+
+  <h3>Deploy</h3>
+  <ul>
+    <li><a href="#helm-deploy">Helm Install <span class="badge badge-info">HELM</span></a></li>
+    <li><a href="#health-verify">Health Verification</a></li>
+    <li><a href="#scaling">Scaling &amp; HPA</a></li>
+  </ul>
+
+  <h3>Operations</h3>
+  <ul>
+    <li><a href="#monitoring">Monitoring</a></li>
+    <li><a href="#rollback">Rollback Procedure</a></li>
+    <li><a href="#upgrade">Upgrade Procedure</a></li>
+    <li><a href="#troubleshooting">Troubleshooting</a></li>
+  </ul>
+
+  <h3>Reference</h3>
+  <ul>
+    <li><a href="#pvc-sizing">PVC Sizing Guide</a></li>
+    <li><a href="#env-vars">Environment Variables</a></li>
+    <li><a href="#versions">Version Matrix <span class="badge badge-info">P115-122</span></a></li>
+    <li><a href="#split-host-fixes">Split-Host Fixes <span class="badge badge-ready">DONE</span></a></li>
+  </ul>
+</div>
+
+<!-- ═══════════════════════ MAIN ═══════════════════════ -->
+<div class="main">
+
+<!-- ── Hero ──────────────────────────────────────────────── -->
+<div class="hero">
+  <h1>OpenShift Release Plan <span class="version-badge">v2.1.0</span></h1>
+  <p>Step-by-step deployment guide for QueryStudio on Red Hat OpenShift Container Platform (OCP 4.x). Covers image build, PVC/NFS, Helm chart, health checks, scaling, and rollback. Includes mixed TLS routing (edge UI + passthrough API), runtime env injection, and multi-pod cache coherence.</p>
+  <div class="meta">
+    <span>Updated: 2026-04-19</span>
+    <span>2,038 backend + 147 Vitest tests passing</span>
+    <span>Frontend build: clean</span>
+    <span>Phases 115–122 + routing fixes included</span>
+  </div>
+</div>
+
+<!-- ── Stats Bar ─────────────────────────────────────────── -->
+<div class="stats-bar">
+  <div class="stat pods"><div class="num">10+</div><div class="label">Pods</div></div>
+  <div class="stat services"><div class="num">6</div><div class="label">Services</div></div>
+  <div class="stat storage"><div class="num">50Gi+</div><div class="label">PVC Size</div></div>
+  <div class="stat tests"><div class="num">2,038</div><div class="label">Tests</div></div>
+  <div class="stat steps"><div class="num">18</div><div class="label">Sections</div></div>
+</div>
+
+<!-- ── Search ────────────────────────────────────────────── -->
+<div class="search-bar">
+  <input type="text" id="searchInput" placeholder="Search by command, file, config key, or keyword..." oninput="filterSections()">
+</div>
+
+<!-- ═══════════════════════ SECTIONS ═══════════════════════ -->
+<div class="sections">
+
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<div class="section-group" id="rel-2026-08-19">
+  <h2>Release 2026-08-19 &mdash; Ocean-Dive Visibility, Pod Roles, Dependency Truth &amp; Starburst Parity <span class="type-badge type-critical">Incident</span></h2>
+  <p class="date">29 commits <code>f7f0a510</code> &rarr; <code>b3a97650</code> &nbsp;&middot;&nbsp; 114 files, +9165/&minus;662 &nbsp;&middot;&nbsp; backend <strong>16,438 passing</strong> &nbsp;&middot;&nbsp; ETL <strong>3,247 passing / 0 failing</strong></p>
+  <p class="summary">
+    Triggered by a production incident: a user selected a single region
+    (<code>eu-west</code>) and the query crashed &mdash; <code>DuckDB query execution crashed
+    (exit code 1, exit code 1)</code> at <code>memory_limit=3.4GB</code>. The report was
+    &ldquo;the pruning brain is diving in oceans, not islands&rdquo;. Three independent
+    defects turned out to sit on one chain: the predicate was lost silently, the
+    resulting full-table scan had no alarm on the parquet path, and the error message
+    discarded the actual cause. A fourth, unrelated thread &mdash; three dependency
+    manifests that had drifted from what the code imports &mdash; explained a second
+    machine&rsquo;s ~900 failing tests.
+  </p>
+
+  <h3>1. The error message discarded the error <span class="type-badge type-fix">Diagnostics</span></h3>
+  <p class="summary">
+    The DuckDB child process catches the exception, sanitizes it, and writes
+    <code>{"error": "&lt;Type&gt;: &lt;msg&gt;"}</code> to <em>the same result file the parent reads
+    on success</em> &mdash; then exits 1. The parent&rsquo;s <code>returncode != 0</code> branch raised on
+    the exit code alone and never opened that file. Every ordinary query failure &mdash; OOM,
+    spill exhaustion, an httpfs 403/404, a corrupt parquet &mdash; therefore reached the
+    operator as the engine&rsquo;s boot banner with no cause. <code>exit 1</code> was also the only
+    common exit code with no decoder entry, producing the tautology.
+  </p>
+  <pre class="code before">DuckDB query execution crashed (exit code 1, exit code 1).
+SUBPROCESS: duckdb version=1.5.3, httpfs extension PRESENT at ...
+SUBPROCESS: DuckDB memory_limit=3.4GB
+SUBPROCESS: DuckDB S3 setup plan: kind=native_s3_signed_by_duckdb ...
+   &larr; 2.5 KB of setup banner; the real exception truncated out of the middle</pre>
+  <pre class="code after">OutOfMemoryException: failed to offload data block of size 256.0 KiB (13.6 GiB/13.6 GiB used)
+  DuckDB query execution crashed (exit 1 &mdash; query error reported by the subprocess
+  driver, exit code 1). SUBPROCESS: ... &larr; banner retained as supporting context</pre>
+  <table class="info">
+    <tr><th>Change</th><th>File</th></tr>
+    <tr><td>Parent reads the child&rsquo;s error result and leads the message with it; fail-open to today&rsquo;s message when absent or unparseable</td><td><code>backend/core/duckdb_subprocess.py</code></td></tr>
+    <tr><td><code>exit 1</code> now decoded: a query error <em>reported</em> by the driver, not a crash. A cgroup OOM-kill is <code>-9</code> and never 1.</td><td><code>_decode_subprocess_exit()</code></td></tr>
+  </table>
+
+  <h3>2. The parquet path had no ocean-dive alarm <span class="type-badge type-critical">Root Cause</span></h3>
+  <p class="summary">
+    The Iceberg reader has logged a <code>PARTITION-PRUNING ALARM</code> since 2026-08-02.
+    The plain-parquet branch of <code>duckdb_views</code> never grew one &mdash; its only trace was
+    <code>prune=False</code> buried mid-line in an INFO about file counts. Meanwhile every way a
+    partition predicate can go missing on that path is <strong>fail-open and logged at DEBUG or
+    not at all</strong>:
+  </p>
+  <table class="info">
+    <tr><th>Silent degradation path</th><th>Visibility before</th></tr>
+    <tr><td><code>sqlglot</code> absent, a parse failure, or an unrecognised SQL shape &rarr; extractor returns <code>[]</code></td><td><code>logger.debug</code>, or no log at all</td></tr>
+    <tr><td>Derived-table wrapper (<code>SELECT * FROM (&lt;sql&gt;) AS wrap</code>) whose scope guard declines &mdash; incl. the multiplicity guard requiring each scope table to appear exactly once</td><td>none</td></tr>
+    <tr><td>A dict-shaped <code>query_config</code> &mdash; no <code>.filters</code> attribute, so the user&rsquo;s selection is dropped</td><td>none</td></tr>
+    <tr><td>Filter qualified to a name that does not match the registered table</td><td>WARNING for Iceberg only; nothing for parquet</td></tr>
+  </table>
+  <p class="summary">
+    New <code>backend/core/ocean_dive_alarm.py</code> emits the <em>same</em> log prefix on the parquet
+    path so one grep and existing alerting cover both engines. It names which of the two shapes
+    occurred (predicate lost upstream vs. present but unmatched), and stays quiet when a full scan
+    is the correct plan &mdash; unpartitioned table, below the file floor, or pruning engaged.
+    <strong>Strictly observe-only:</strong> it changes no file list and cannot raise.
+  </p>
+  <pre class="code output">PARTITION-PRUNING ALARM (parquet) for 'sales': table IS partitioned (hive-style key
+segments present) but ALL 41213 files were listed for scan &mdash; no partition filter
+reached the reader at all &mdash; the predicate was lost upstream ... This is an ocean
+scan where an island was intended: it is the usual cause of an OutOfMemoryException /
+spill exhaustion on a pod sized for a pruned read.</pre>
+  <p class="summary">
+    <strong>Scope note.</strong> This makes the dive visible; it does not prevent it. Failing closed
+    remains <code>iceberg.require_partition_pruning=true</code> (default <code>false</code>, observe-only).
+  </p>
+
+  <h3>3. Separate background-job pods changed nothing <span class="type-badge type-infra">Pod Roles</span></h3>
+  <p class="summary">
+    <code>PodRole.should_run</code> decided the hybrid case with
+    <code>(scheduler_mode or "embedded") != "external"</code> &mdash; i.e. &ldquo;the caller passed
+    nothing&rdquo; meant &ldquo;run the daemons here&rdquo;. Most call sites pass nothing, including
+    <code>dq_scheduled_loop</code>, which <strong>executes every enabled data-quality rule on a timer as
+    real queries, on the same pod as DuckDB</strong>. An operator who stood up a scheduler pod and set
+    <code>scheduler.mode=external</code> got the daemons anyway, running in <em>both</em> pods.
+  </p>
+  <table class="info">
+    <tr><th>Defect</th><th>Effect</th><th>Fix</th></tr>
+    <tr><td><code>scheduler_mode=None</code> read as &ldquo;embedded&rdquo;</td><td>DQ engine, ETL scheduler, <code>pv_cleanup</code>, SLA scanner ran on the API pod despite <code>external</code></td><td>resolve the configured mode when the caller passes none &mdash; one setting now means one thing everywhere</td></tr>
+    <tr><td>Embedded APScheduler gated only by <code>scheduler.mode</code>, never by role</td><td>a pod stamped <code>QS_POD_ROLE=api</code> still booted the 20-thread job pool, both mirrors, the bloom scanner, the brain coordinator and the credential prewarmer</td><td>gated by role as well</td></tr>
+    <tr><td>Four DB-retention loops had no role gate at all &mdash; <code>etl-cleanup</code>, <code>feed-cleanup</code>, <code>dq-cleanup</code>, <code>agent-log-cleanup</code></td><td>every pod woke on a timer and issued the same DELETEs against one database</td><td>gated through one <code>_daemon_allowed()</code> helper, plus a standing test that fails on any future ungated daemon start</td></tr>
+    <tr><td><code>api/values.yaml</code> stamped <code>role: "hybrid"</code> on the API pod itself</td><td>the last chart still requesting the full fleet</td><td>flipped to <code>role: "api"</code></td></tr>
+  </table>
+  <p class="summary">
+    Deliberately still per-pod, each with its reason recorded in the test suite: the
+    <strong>cancel-request watcher and stale-query canceller</strong> (they must run on whichever pod
+    executes the query, or user cancels do nothing), the LLM preload (serving-side, default off), and the
+    thread pools the API pod needs to do its job. Verified that the heavy brain entries in that registry
+    register with a factory returning <code>None</code> &mdash; admin-UI visibility only, no thread &mdash;
+    so they do not run on an API pod.
+  </p>
+  <p class="summary"><strong>Safety property:</strong> every one of these changes can only ever start <em>fewer</em> daemons; each failure path falls back to today&rsquo;s batteries-included behaviour.</p>
+
+  <h3>4. Three dependency manifests, all drifted <span class="type-badge type-config">Supply Chain</span></h3>
+  <p class="summary">
+    A second machine reported ~900 failing tests (<code>No module named 'sqlglot'</code>,
+    <code>'pyiceberg'</code>, <code>'generic_etl'</code>). Not a code problem: the repo carries three
+    manifests and different checkouts install from different ones.
+  </p>
+  <table class="info">
+    <tr><th>Manifest</th><th>Who installs from it</th><th>State found</th></tr>
+    <tr><td><code>backend/requirements.txt</code></td><td>Docker images + CI</td><td>6 imported packages undeclared</td></tr>
+    <tr><td><code>backend/pyproject.toml</code></td><td>any <code>poetry install</code> checkout</td><td><code>pyiceberg</code>/<code>ldap3</code>/<code>redis</code>/<code>alembic</code> parked in <code>optional = true</code> groups that <code>poetry install</code> <strong>skips</strong>; no <code>psutil</code>; no <code>pytest-cov</code>; pyarrow capped <code>&lt;19</code> (re-admitting PYSEC-2026-113), cryptography <code>&gt;=42</code>, fastapi <code>&gt;=0.104</code> with no starlette floor, duckdb <code>&gt;=0.10,&lt;2</code> breaking the exact <code>==1.5.3</code> NFS-extension-tree invariant</td></tr>
+    <tr><td><code>backend/requirements-py313.txt</code></td><td><code>setup_windows.ps1</code></td><td>a hand-kept full copy with <strong>no duckdb, no sqlglot, no pyiceberg</strong>, pinning <code>pyarrow==15.0.0</code> &mdash; and the setup script printed &ldquo;All dependencies installed successfully&rdquo; over it, because its verify step imported only four packages</td></tr>
+  </table>
+  <table class="info">
+    <tr><th>Newly declared</th><th>Why it was invisible</th></tr>
+    <tr><td><code>urllib3</code>, <code>anyio</code></td><td>unguarded module-level imports in <code>s3_storage</code>, <code>aws_portal_auth</code>, the vault helper and <code>auth_api</code> &mdash; arriving transitively by luck</td></tr>
+    <tr><td><code>httpx</code></td><td>declared only in <code>requirements-dev.txt</code>, but imported by <code>dq_alerting</code> and the http_fetch dataflow stage &mdash; the production image had none</td></tr>
+    <tr><td><code>PyYAML</code></td><td><code>core/dataflow/gitops.py</code> parses YAML pipelines; declared nowhere at all</td></tr>
+    <tr><td><code>certifi</code>, <code>botocore</code></td><td>direct imports riding on a parent package&rsquo;s dependency</td></tr>
+    <tr><td>ETL: <code>duckdb</code>, <code>urllib3</code>, <code>numpy</code>, <code>packaging</code>, <code>botocore</code>, <code>certifi</code>, <code>pyiceberg</code></td><td>AST scan of all 380 ETL files. <code>pyiceberg</code> is <em>optional</em> in <code>preflight.py</code> for three workflows &mdash; auto-installed on the Airflow driver pod but absent on the polling image, so Iceberg supplement-pruning happened under Airflow and silently did not under polling</td></tr>
+  </table>
+  <p class="summary">
+    Interpreter-split pins now live in <code>requirements.txt</code> as environment markers
+    (<code>numpy==1.26.2; python_version &lt; "3.13"</code> / <code>numpy&gt;=2.1.0; python_version &gt;= "3.13"</code>),
+    because pip <em>intersects</em> specifiers rather than letting a later one override &mdash; an overlay
+    file cannot override an inherited pin. Six new opt-in extras (<code>kafka</code>, <code>compression</code>,
+    <code>psycopg3</code>, <code>agents</code>, <code>llm</code>, <code>s3fs</code>) cover the lazy imports that
+    are genuinely optional.
+  </p>
+
+  <h3>5. Portability &amp; test-integrity fixes <span class="type-badge type-fix">Hygiene</span></h3>
+  <table class="info">
+    <tr><th>Issue</th><th>Detail</th></tr>
+    <tr><td>~139 guard tests hardcoded the backend directory <em>name</em></td><td><code>Path("backend/core/x.py")</code> breaks on a src-layout checkout. <code>tests/_paths.py</code> now derives both roots from the test package&rsquo;s own location</td></tr>
+    <tr><td>30 absolute developer paths in tests</td><td><code>sys.path.insert(0, "c:/DEV/outputs/spark/jobs")</code> &mdash; the insert never fails, so the error surfaced one line later as <code>No module named 'generic_etl'</code></td></tr>
+    <tr><td>ETL tree discovery in <strong>product code</strong></td><td>three modules, three different candidate lists, each led by one developer&rsquo;s absolute path; <code>etl_bridge</code>&rsquo;s only portable fallback was off by one parent and had never matched. Now one chokepoint, <code>core/etl_root.py</code>, with <code>QS_ETL_ROOT</code> as the deploy knob</td></tr>
+    <tr><td>Host-dependent spill test</td><td>asserted the absolute cap but the resolver returns <code>min(free-disk share, cap)</code> &mdash; the disk binds anywhere in 22.5&ndash;90 GB free, i.e. most laptops</td></tr>
+    <tr><td>Windows <code>WinError 206</code></td><td>artifact keys are ~140 chars by design; <code>LocalArtifactStore</code> now opts long paths out of MAX_PATH. No-op on POSIX</td></tr>
+    <tr><td>Two cross-module state leaks</td><td>a process-global no-retry blocklist, and a stage registry populated only if another module imported first &mdash; tests that passed in a full run and failed alone, or vice versa</td></tr>
+  </table>
+  <h3>6. Nine ways the prune funnel returned WRONG or ZERO rows <span class="type-badge type-critical">Data Loss</span></h3>
+  <p class="summary">
+    Found by an <strong>empirical harness</strong> — the real extractor and hive pruner
+    driven over synthetic partition layouts, reporting files-in / files-out — rather than
+    by reading code. Every row below is a measurement.
+  </p>
+  <table class="info">
+    <tr><th>Query</th><th>Before</th><th>After</th><th>Cause</th></tr>
+    <tr><td><code>col NOT LIKE 'XYZ%'</code></td><td>pruned to the <strong>inverse</strong> island</td><td>correct</td><td>sqlglot AST change (below)</td></tr>
+    <tr><td><code>month = 1</code> on <code>month=01</code></td><td><strong>0 files</strong></td><td>15</td><td>equality compared raw strings; ranges already coerced numerically</td></tr>
+    <tr><td><code>active = true</code></td><td><strong>0 files</strong></td><td>1</td><td><code>str(True)</code> is <code>'True'</code>, the token is <code>true</code></td></tr>
+    <tr><td><code>BETWEEN '2026-08-19 00:00:00' …</code></td><td><strong>1 of 3</strong> — lost the 19th</td><td>2</td><td>a shorter string is a prefix and sorts LOWER</td></tr>
+    <tr><td><code>active != 'false'</code> / <code>IN</code> / <code>NOT IN</code> / <code>NOT BETWEEN</code></td><td>file dropped</td><td>kept</td><td><code>bool('false')</code> is <code>True</code> — truthiness, not a parse — in four separate branches</td></tr>
+    <tr><td><code>WHERE c IS NULL</code></td><td>every file pruned &rarr; ROUTE_EMPTY</td><td>kept</td><td>an unrecorded null count read as a confident <code>0</code>, in three places</td></tr>
+  </table>
+
+  <h4>The one that shipped in your image</h4>
+  <p class="summary">
+    sqlglot moved negation from a wrapper node onto a flag:
+  </p>
+  <pre class="code before">&lt;= 30.7.0    NOT LIKE 'X%'  -&gt;  Not(this=Like(...))
+&gt;= 30.17.0   NOT LIKE 'X%'  -&gt;  Like(..., negate=True)      &lt;- no Not wrapper</pre>
+  <p class="summary">
+    Both extractors detect negation by looking for <code>exp.Not</code>. On the new AST there
+    is none, so the <strong>positive</strong> branch ran and emitted <code>like_prefix</code>,
+    which decomposes to <code>col &gt;= 'XYZ' AND col &lt;= 'XYZ&lt;U+10FFFF&gt;'</code> — the exact
+    inverse. A query for &ldquo;does NOT start with XYZ&rdquo; pruned to the files that <strong>do</strong>.
+  </p>
+  <table class="info">
+    <tr><th>Fact</th><th>Detail</th></tr>
+    <tr><td>Deployed API pod runs</td><td><code>sqlglot 30.17.0</code> — the inverting version</td></tr>
+    <tr><td><code>requirements.txt</code> said</td><td><code>sqlglot&gt;=25.0.0</code>, <strong>no upper bound</strong> — a fresh image pulls it</td></tr>
+    <tr><td>The repo's own tests caught it</td><td>11 failures, every one a NOT LIKE data-loss test — the moment the pod's version was installed. They had simply never been run against it.</td></tr>
+    <tr><td>Two extractors, one bump</td><td><code>sql_partition_extractor</code> AND <code>pruning_support</code> — they could disagree about the SENSE of the same filter</td></tr>
+    <tr><td>Fix</td><td>both AST shapes handled via one shared helper; both manifests capped <code>&lt;31</code></td></tr>
+  </table>
+  <p class="summary">
+    <strong>The rule this establishes:</strong> predicate extraction is FAIL-OPEN by charter —
+    an AST it does not recognise yields no filter and no error. A fail-open consumer plus an
+    unpinned parser is silent wrong answers. Cap any parser whose consumer degrades quietly.
+  </p>
+
+  <h4>The discipline behind every fix</h4>
+  <p class="summary">
+    Each widening is <strong>keep-only</strong> and wired into inclusion predicates only
+    (<code>=</code>, <code>IN</code>, ranges). <code>not_equals</code> / <code>not_in</code> /
+    <code>not_between</code> stay un-widened: there, &ldquo;these are equal&rdquo; would justify
+    DROPPING a file. Keeping a file costs a row filter; dropping one is a wrong answer.
+    The exclusion path additionally requires <em>every</em> viable reading to agree —
+    &ldquo;satisfiable under SOME reading&rdquo; is sound for a keep and unsound for a drop.
+  </p>
+
+  <h3>7. Partition-first pruning: seek the island, don't scan for it <span class="type-badge type-infra">Performance</span></h3>
+  <p class="summary">
+    Operator report: <em>&ldquo;you build the full ocean then try to find the small islands, and
+    that's very time consuming.&rdquo;</em> Correct — and the design was half-built, which is why it
+    looked like it should already be fast.
+  </p>
+  <table class="info">
+    <tr><th>State</th><th>Detail</th></tr>
+    <tr><td>Already there</td><td><code>partition_values</code> on every file row (migration 016), and the island carve already pushed <code>partition_values[col] IN (...)</code> down into SQL rather than filtering in Python</td></tr>
+    <tr><td>Missing</td><td><strong>no index on it, anywhere in the schema</strong> — so the predicate was a POST-FILTER: seek the snapshot, then walk every file row and JSON-extract the key from each. 500k files touched to return a few thousand.</td></tr>
+    <tr><td>Why not a JSON index</td><td>Postgres and SQLite both index ONE extracted key per index, and the partition columns are not known when the schema is created</td></tr>
+    <tr><td>Fix</td><td><code>iceberg_file_partition_index(bucket, table_prefix, snapshot_id, part_key, part_value, file_path)</code> — the leading columns ARE the seek key (migration 018)</td></tr>
+  </table>
+  <pre class="code output">EXPLAIN QUERY PLAN:
+SEARCH iceberg_file_partition_index USING COVERING INDEX ix_iceberg_file_partition_seek
+  (bucket=? AND table_prefix=? AND snapshot_id=? AND part_key=? AND part_value=?)
+
+80 of 4000 files resolved in 6.5 ms.</pre>
+  <p class="summary">
+    <code>SEARCH</code>, not <code>SCAN</code> — and <em>covering</em>, so it answers from the index
+    without touching the file table.
+  </p>
+  <p class="summary">
+    <strong>Safety over speed.</strong> The index is an accelerator, never an authority. It is used
+    only when it can prove COMPLETE coverage for the filtered key; anything less returns nothing and
+    the existing query runs byte-for-byte unchanged. A test drives both paths and asserts identical
+    output. Three details decide whether it is used at all: the NULL partition is stored (skipping it
+    would drop a table below full coverage on one file); the seek is NULL-inclusive so it returns the
+    same fail-open superset as the query it replaces; and it self-heals an empty OR partial index from
+    data already in the database, because snapshots are immutable and fleet-synced ones arrive
+    partially indexed.
+  </p>
+
+  <h3>8. SAP: an import that resolved on no machine <span class="type-badge type-fix">ETL</span></h3>
+  <table class="info">
+    <tr><th>Defect</th><th>Detail</th></tr>
+    <tr><td>Wrong module path, in BOTH arms</td><td>The backend imported <code>steps.sap_odata_base</code>; the module is at <code>ETL/steps/<strong>sap</strong>/sap_odata_base.py</code>, and all ~15 importers inside the ETL tree spell it that way. Each site wrapped the import in a try/except whose &ldquo;path bootstrap&rdquo; fallback repeated the SAME wrong path, and probed for the equally-wrong file — so the failure read <em>&ldquo;SAP ETL framework not importable&rdquo;</em>, pointing at packaging rather than a typo.</td></tr>
+    <tr><td>The <code>$count</code> URL asked a different question</td><td><code>urlencode</code> defaults to <code>quote_plus</code>, writing a space as <code>+</code> — the form-body convention. A <code>$filter</code> is an OData expression, and NetWeaver Gateway does not reliably read <code>+</code> as a space inside one. The data request sent <code>%20</code> and the count request sent <code>+</code>: either a 400, or a count for a DIFFERENT predicate than the one streamed.</td></tr>
+    <tr><td>The completeness ledger manufactured its own evidence</td><td>When <code>$count</code> is unavailable, <code>full_count = actual_count</code> — and the gate is <code>actual_count == full_count</code>, a number compared with itself, printed as <code>[OK]</code>. Because of the URL bug the pre-flight failed on real runs, so <strong>every affected run printed a clean completeness ledger</strong>. Now reports <code>[UNVERIFIED]</code> at WARNING and says why.</td></tr>
+  </table>
+
+  <h3>9. Adversarial review of the fixes themselves <span class="type-badge type-verify">Self-Audit</span></h3>
+  <p class="summary">
+    Two agents were pointed at the day's own changes with instructions to break them. They found
+    six defects, including <strong>a regression introduced by the fixes</strong>. Three further
+    findings were rejected after verification — agent output is a lead, not a result.
+  </p>
+  <table class="info">
+    <tr><th>Finding</th><th>Resolution</th></tr>
+    <tr><td><strong>The retention sweeps were gated onto a pod that never runs them.</strong> etl/feed/dq/agent-log cleanup are plain daemon threads in <code>main.py</code>; <code>scheduler_worker.py</code> runs <code>init_scheduler</code> plus two explicit jobs and never starts them. They only ever ran on the API pod — gating them off it meant they ran on NO pod: silent unbounded table growth.</td><td><strong>REVERTED.</strong> &ldquo;This can only ever start FEWER daemons&rdquo; was written as a safety property; for a daemon nothing else runs, fewer means zero.</td></tr>
+    <tr><td>The exclusion-path guard stopped one layer short — the numeric fast path returned before it, so <code>not_between</code> still decided on one reading</td><td>exclusion now requires every viable reading to agree</td></tr>
+    <tr><td>The partition seek excluded NULL-partition files the legacy arm keeps — and both <code>__HIVE_DEFAULT_PARTITION__</code> and the EMPTY token map to <code>None</code>, so <code>region = ''</code> returned nothing</td><td>seek is NULL-inclusive; a test asserts it returns exactly the legacy rows</td></tr>
+    <tr><td>The index never engaged on fleet-synced tables — <code>copy_forward</code> inserts file rows with no mirror, and the self-heal fired only on an EMPTY index</td><td>self-heal now completes a partial index too</td></tr>
+    <tr><td><code>QueryFeatureBuilder</code> rebuilt the null-count collapse one layer UP and set the flag that makes the router skip the fixed layer — so the earlier fix was unreachable</td><td>fixed; this was the highest-value item of the five</td></tr>
+    <tr><td>The pruning gate's UNJUSTIFIED verdict was stamped, logged as <em>&ldquo;results may be missing rows&rdquo;</em>, and read by nothing — so a query the engine itself flagged could be certified <strong>COMPLETE</strong></td><td>now a hard negative in the completeness certificate</td></tr>
+  </table>
+  <p class="summary">
+    <strong>Rejected after verification:</strong> MoR equality deletes being applied globally
+    (<code>_partition_pred</code> is both built and interpolated — already correct); the hive
+    <code>NOT BETWEEN</code> &ldquo;day token is an interval&rdquo; P0 (assumes the partition key is a
+    truncation of the filtered column — when the key IS that column the drop is correct, and
+    &ldquo;fixing&rdquo; it would gut date pruning).
+  </p>
+
+  <h3>10. The pattern behind every defect <span class="type-badge type-ops">Retrospective</span></h3>
+  <p class="summary">
+    Nineteen commits, and nearly every fix was one of two shapes:
+  </p>
+  <table class="info">
+    <tr><th>Shape</th><th>Instances</th></tr>
+    <tr><td><strong>&ldquo;Unknown&rdquo; converted into &ldquo;certain&rdquo;</strong> — and certainty is what licenses a prune</td><td>a missing null count became &ldquo;zero nulls&rdquo;; a missing record count became &ldquo;empty file&rdquo;; <code>'false'</code> became truthy <code>True</code>; <code>'01'</code> vs <code>1</code> became &ldquo;different values&rdquo;; a date token vs a timestamp literal became &ldquo;less than&rdquo;; an unrecognised AST became a positive predicate</td></tr>
+    <tr><td><strong>A verdict computed and then discarded</strong></td><td>the child's real exception written to a file the parent never opened; the pruning gate's UNJUSTIFIED count logged and read by nothing; the ocean-dive verdict with no consumer on the parquet path</td></tr>
+  </table>
+  <p class="summary">
+    None of them raised. None logged at INFO. Each returned a clean, confident, wrong answer —
+    which is why they survived in a suite that was otherwise green.
+  </p>
+</div>
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<div class="section-group" id="rel-starburst-parity">
+  <h2>Starburst / Trino Parity &mdash; the SQL we sent was not the SQL Trino accepts <span class="type-badge type-critical">Correctness</span></h2>
+  <p class="date">commit <code>49a34668</code> &nbsp;&middot;&nbsp; 12 files &nbsp;&middot;&nbsp; 54 new tests</p>
+  <p class="summary">
+    A deep audit of the Trino/Starburst route found the parts everyone looks at were clean &mdash;
+    <code>LIMIT</code>/0-unlimited semantics, the visual-filter compile chokepoint, Iceberg partition-DDL
+    parsing &mdash; while the SQL actually put on the wire was not. Every defect below was
+    <strong>reproduced live</strong> against the repo venv before being fixed, not inferred from reading.
+    For a Starburst table the visual builder emitted:
+  </p>
+  <pre><code>WHERE "business_close_date" = '2026-08-13'
+  AND "event_ts" &gt;= '2026-08-13T00:00:00.000000Z'
+  AND "is_active" = 'true'
+  AND "acct_num" = '007'
+LIMIT 7 OFFSET 50</code></pre>
+  <p class="summary">
+    The first three are hard failures (<code>Cannot apply operator: date = varchar(10)</code>).
+    <strong>The fourth is the dangerous one</strong>: against a varchar column storing unpadded
+    account numbers it does not error &mdash; it matches <em>nothing</em> and returns HTTP 200.
+  </p>
+
+  <h3>1. The typed-literal machinery was unreachable <span class="type-badge type-fix">Data loss</span></h3>
+  <p class="summary">
+    <code>sql_literal</code> has rendered <code>DATE '&hellip;'</code> since 2026-08-13, and the Published-View
+    wrap and federation were both taught to pass a type. The <em>visual</em> route never was:
+    <code>FilterModel</code> had no <code>data_type</code> field and <code>render_inline</code> called the
+    one-argument <code>sql_literal</code>, so on that route the whole feature was dead code.
+    <code>Param</code> now carries the type, <code>compile_filter_condition</code> stamps it <strong>once</strong> for
+    all 13 operators (skipping <code>contains</code>/<code>not_contains</code>, whose parameter is a
+    <code>LIKE</code> <em>pattern</em> and must stay a string), <code>sql_literal</code> learned boolean and
+    numeric, and a new <code>core/column_types.py</code> resolves types from the catalog when the caller
+    supplies none &mdash; cached, fail-open, with a caller-declared type always winning.
+  </p>
+
+  <h3>2. Pagination used the wrong grammar <span class="type-badge type-fix">Fix</span></h3>
+  <p class="summary">
+    Trino, Starburst, Presto and Athena require <code>OFFSET</code> <em>before</em> <code>LIMIT</code>,
+    and Oracle has no <code>LIMIT</code> keyword at all &mdash; while <code>build_query_sql</code>&rsquo;s own docstring
+    advertised its output as &ldquo;suitable for any SQL connector&rdquo;. Every paged visual query past page 1
+    failed on Starburst with a parse error. A new <code>pagination_clause()</code> is the single authority;
+    <code>0</code> still means unlimited on every dialect.
+  </p>
+
+  <h3>3. The user&rsquo;s SQL was rewritten for the wrong engine <span class="type-badge type-critical">Wrong table</span></h3>
+  <p class="summary">
+    Both the BF-577 Starburst-compat cleanup and <code>translate_to_duckdb_with_fixes</code> ran
+    <strong>before</strong> <code>_conn_type</code> was resolved (~400 lines later), so they rewrote blind.
+    Raw Starburst SQL reached Starburst with <code>date_parse()</code> turned into <code>STRPTIME()</code>
+    &mdash; not a Trino function &mdash; and <code>catalog.schema.table</code> stripped to a bare registered
+    name, which on Trino resolves against the session catalog: <strong>a different table, read without
+    error</strong>. Both are now gated on the target engine.
+  </p>
+
+  <h3>4. A filter that would not render silently vanished <span class="type-badge type-critical">Data exposure</span></h3>
+  <p class="summary">
+    <code>_build_condition</code> returned <code>None</code> for an unknown operator or a half-supplied
+    <code>BETWEEN</code>, and its comment called this &ldquo;the safer fail-open&rdquo;. It is not safe:
+    dropping a filter does not degrade the answer, it <strong>widens</strong> it &mdash; more rows than the
+    caller asked for, served as HTTP 200 on a published API. Worse, <code>feed_engine</code> caught the
+    failure, logged &ldquo;running unwrapped&rdquo;, and delivered the <em>unfiltered</em> table to its
+    SFTP / email / S3 destination as a successful run.
+  </p>
+  <p class="summary">
+    Unrenderable filters now raise; the feed aborts rather than delivering. A filter nobody supplied a
+    value for is still skipped &mdash; that is an <em>absent</em> filter, not a broken one, and the split
+    is what makes failing safe.
+  </p>
+
+  <h3>5. Four smaller defects of the same family</h3>
+  <table class="info">
+    <tr><th>Defect</th><th>Effect</th></tr>
+    <tr><td><code>contains</code> emitted <code>ILIKE</code></td><td>Neither Trino nor Oracle has it. The pushdown path hid this (sqlglot transpiles it); the fallback path concatenated it verbatim. Now <code>LOWER(..) LIKE LOWER(..)</code>.</td></tr>
+    <tr><td>A third CA trust store</td><td>The Trino client had a private resolver knowing <em>one</em> path and never merging certifi, while <code>ssl_config</code> &mdash; used by DuckDB, boto3, pyiceberg and REST &mdash; scans seven field spellings and merges. Same issue recorded 2026-08-07. <code>"True"</code> was also returned as a file <em>path</em>.</td></tr>
+    <tr><td><code>auth_type: kerberos</code> / <code>oauth2</code></td><td>Advertised in the docstring, unimplemented in code, fell through to <code>auth=None</code> &mdash; configured, ignored, <strong>connected anonymously</strong>. Now wired; an unknown mode refuses to connect.</td></tr>
+    <tr><td>Oracle <code>limit=0</code></td><td>Oracle bypasses <code>connectors.base._apply_limit</code> (it has no <code>LIMIT</code> keyword), so the 2026-08-17 zero-fold sweep never reached it: <code>WHERE ROWNUM &lt;= 0</code>, i.e. <strong>zero rows for &ldquo;unlimited&rdquo;</strong>.</td></tr>
+    <tr><td><code>/api/execute/estimate-sql</code></td><td>Read <code>list(envelope.values())[0]</code> &mdash; the <em>columns</em> list &mdash; so <code>int()</code> raised into a broad except and the connector row estimate was <strong>always &minus;1</strong>, silently, at debug level.</td></tr>
+  </table>
+  <p class="summary">
+    Also fixed: <code>tests/_paths</code> read plain UTF-8, so the BOM-prefixed modules in this tree made
+    source guards <strong>raise instead of check</strong>. Five tests that pinned the old behaviour were
+    rewritten to assert the corrected semantics.
+  </p>
+</div>
+
+<div class="section-group" id="rel-rls">
+  <h2>Row Security &mdash; two ways to serve rows a policy excludes <span class="type-badge type-critical">Security</span></h2>
+  <p class="date">commit <code>a3dae4f5</code> &nbsp;&middot;&nbsp; 15 new tests</p>
+
+  <h3>1. Visual queries on SQL connectors had no row security at all</h3>
+  <p class="summary">
+    <code>secure_sql</code> was applied to raw SQL, and the DuckDB structured path secures a synthesized
+    query inside <code>execute_query_background</code> &mdash; but SQL built by <code>build_query_sql</code>
+    on the connector branch went straight to <code>execute_sql_connector_background</code>, which contains
+    no row-security code whatsoever. The net effect: <strong>the same visual query was filtered against
+    S3/parquet and unfiltered against Trino, Snowflake, Databricks, Oracle and Athena.</strong>
+    It is now secured at the dispatch, fail-closed to 403 if policy resolution itself fails. Separately,
+    every <code>secure_sql</code> call hardcoded <code>dialect="duckdb"</code>; the raw-SQL site now passes
+    the target&rsquo;s dialect so Trino SQL is not parsed and re-emitted through the wrong grammar.
+  </p>
+
+  <h3>2. The &ldquo;fail-closed&rdquo; fallback failed open</h3>
+  <p class="summary">
+    Six sites fabricate a principal when the real one cannot be resolved &mdash; an AD lookup that is
+    down, a share token, a report with no recorded owner &mdash; as
+    <code>{role: "viewer", groups: []}</code>. The scheduler documented it as: <em>&ldquo;That can only ever
+    restrict further (drop rows), never leak extra rows.&rdquo;</em>
+  </p>
+  <p class="summary">
+    That is backwards in this engine. Policies are <strong>grant-shaped</strong> &mdash; bound to
+    <code>user:</code> / <code>role:</code> / <code>group:</code> / <code>all:*</code> principals &mdash; and the
+    rewriter leaves a table with no <em>matching</em> policy <strong>unfiltered</strong>. The groups are what
+    carry the restriction, so dropping them removes it:
+  </p>
+  <pre><code>policy bound to   group:emea-only  -&gt;  region = 'EU'
+    matches full ctx     : True
+    matches stripped ctx : False        &lt;- every region delivered</code></pre>
+  <p class="summary">
+    A fabricated context is now marked <code>rls_unresolved</code>, which lets the rewriter separate the two
+    cases an empty policy list used to conflate: a table with <strong>no policies</strong> is not an RLS
+    concern and still runs (the common case &mdash; refusing there would break every deployment that does
+    not use RLS), while a table that <strong>has</strong> policies refuses. Telling them apart needs a
+    principal-agnostic lookup, and that check itself fails <em>closed</em>, because &ldquo;we could not
+    check&rdquo; is not &ldquo;there is nothing to check&rdquo;.
+  </p>
+  <p class="summary">
+    One subtlety decided the fix: the new error subclasses <code>PolicyRewriteError</code>, whose handler
+    <em>fail-opens</em>. It is therefore caught <strong>first</strong> and re-raised as
+    <code>PolicyResolutionError</code>, which every caller already turns into a hard 403 or a failed
+    execution. A visible failed run replaces a silently wider one.
+  </p>
+</div>
+
+<div class="section-group" id="rel-cross-connector">
+  <h2>Cross-Connector Audit &mdash; the SQL was DuckDB-shaped everywhere <span class="type-badge type-critical">Correctness</span></h2>
+  <p class="date">commits <code>15390e72</code> &middot; <code>b3a97650</code> &nbsp;&middot;&nbsp; 105 tests in the parity suite</p>
+  <p class="summary">
+    Two adversarial passes: one auditing <strong>Snowflake, Databricks and Athena</strong> with the same
+    lens as the Trino audit, one attacking the day&rsquo;s own commits. Every finding was reproduced before
+    being fixed. The unifying defect is a single assumption &mdash;
+    <strong>the SQL this product generates is DuckDB-shaped, and every other engine received it
+    verbatim.</strong>
+  </p>
+
+  <h3>1. The Databricks finding I had dismissed <span class="type-badge type-critical">Silent wrong data</span></h3>
+  <p class="summary">
+    I judged this one not to reproduce, reasoning that the connector targets SQL warehouses where ANSI
+    mode makes double quotes identifier quotes. That was wrong, and the codebase already knew it &mdash;
+    <code>federation_engine.py</code> records on 2026-08-09 that &ldquo;Spark SQL treats <code>"x"</code>
+    as a STRING LITERAL &rarr; a Databricks dataset report selected constant strings instead of columns
+    (silently wrong data)&rdquo;. Re-proven: sqlglot reads our emitted SQL with
+    <code>read="databricks"</code> as <strong>zero columns and three string literals</strong>.
+  </p>
+  <pre><code>SELECT "region" FROM t WHERE "region" = 'EMEA'
+   -- compares the CONSTANT 'region' to 'EMEA' -> zero rows, HTTP 200</code></pre>
+  <p class="summary">
+    The 2026-08-09 fix existed at <em>one</em> handoff inside FederationEngine and its helper had
+    <strong>no other callers</strong>, so execute, scheduler, reports, published views, preview and feeds
+    all still shipped the pre-fix shape. That helper is now
+    <code>core/sql_connector_dialect.py</code>, called from <code>build_query_sql</code>, with
+    FederationEngine delegating to it &mdash; one chokepoint. It sits after pagination on purpose, so a
+    transpile failure still leaves the correct row window.
+  </p>
+
+  <h3>2. Snowflake, Databricks, Athena</h3>
+  <table class="info">
+    <tr><th>Defect</th><th>Effect</th></tr>
+    <tr><td>Snowflake partition detection read <code>SHOW TABLES</code> index <strong>9 = owner</strong>, not <code>cluster_by</code> (6)</td><td>Owner is never empty, so the &ldquo;not clustered&rdquo; guard never fired: <strong>every</strong> table reported a phantom partition column named after its owner role, while real <code>LINEAR(...)</code> keys were never seen. Now resolved by column NAME &mdash; a drifting positional index was the bug itself.</td></tr>
+    <tr><td>Snowflake cancel called <code>cur.cancel()</code>, which the driver <strong>does not define</strong>, inside <code>except: pass</code></td><td>Every cancel raised AttributeError, was swallowed, and the warehouse ran to completion <strong>burning credits</strong> while the UI said &ldquo;cancelled&rdquo; &mdash; the exact defect BF-262 was recorded as fixing.</td></tr>
+    <tr><td>Athena cancel guarded on an id assigned only <em>after</em> execute() returns</td><td>During the only window where cancel matters the id was <code>None</code>; on a reused connector it held the <em>previous</em> query&rsquo;s id, stopping a finished query while the live scan continued.</td></tr>
+    <tr><td>Athena&rsquo;s per-query cost cap could never work</td><td>No session to <code>SET</code> into, and it is a <strong>workgroup</strong> setting &mdash; while the UI promised &ldquo;Athena will reject queries that would scan more than this&rdquo; and the failure was swallowed. Now warns, reports real breaches, and the UI states what is true.</td></tr>
+    <tr><td>Athena <code>information_schema</code> queries used <strong>backticks</strong></td><td>Athena DML is Trino grammar (backticks are DDL-only), so they could never parse and every call rode a fallback &mdash; which also disabled the typed-literal fix on Athena, since column types come from <code>list_columns</code>.</td></tr>
+    <tr><td>Athena <code>auth_type: profile</code> with no profile name</td><td>Fell through to the ambient credential chain and ran as a <strong>different principal</strong>, silently. Now refuses.</td></tr>
+    <tr><td><code>max_rows_compared or 50000</code></td><td>The 2026-08-13 zero-fold again: a &ldquo;compare everything&rdquo; reconciliation compared 50k rows per side and reported the verdict as <strong>COMPLETE</strong>.</td></tr>
+  </table>
+
+  <h3>3. Defects in the day&rsquo;s own fixes <span class="type-badge type-verify">Self-review</span></h3>
+  <p class="summary">
+    The second agent was pointed at my own commits with instructions to assume I had made mistakes. It
+    found six that mattered:
+  </p>
+  <ul>
+    <li>A <strong>seventh</strong> fabricated-principal site &mdash; <code>feed_principal</code>, which never resolves AD groups and repeated the refuted &ldquo;most restrictive shape&rdquo; claim. Feeds are the delivery path, so this was the widest instance of the escalation.</li>
+    <li>The &ldquo;feed aborts&rdquo; fix covered <strong>one of two identical</strong> catch sites; four more callers swallowed the error and ran unwrapped.</li>
+    <li>The dialect gate also switched off BF-577&rsquo;s <strong>JSON-escape repair</strong>, which is engine-agnostic. The two halves are now split.</li>
+    <li>Row security was wired at the interactive dispatch only &mdash; the structured published view (the external surface) and the scheduler still reached connectors unsecured.</li>
+    <li>The numeric literal round-tripped through <code>float</code>, so <code>123456789.123456789012345678</code> became <code>&hellip;79</code> and an equality filter on <code>DECIMAL(38,18)</code> matched <strong>nothing</strong> &mdash; converting a loud type error into a silent empty result.</li>
+    <li><strong>Reverting the wiring of all three headline fixes kept every test green.</strong> The unit tests exercised the helpers directly and never touched the dispatch that has to pass the arguments.</li>
+  </ul>
+
+  <h3>4. Finishing the wiring</h3>
+  <p class="summary">
+    Checking &ldquo;all done?&rdquo; against the audit lists rather than asserting it found three more:
+    the <strong>type annotation was wired at exactly one dispatch</strong> (so a date-filtered query that
+    worked interactively still failed once scheduled or published); the <strong>cross-source secondary
+    leg</strong> read the raw request field, discarding both the parameter substitution and the
+    row-security rewrite; and <strong>only Trino used the shared trust store</strong>, leaving Snowflake,
+    Databricks and Athena with no recourse on a private-CA deployment.
+  </p>
+  <p class="summary">
+    The recurring shape across the whole day is one sentence:
+    <strong>a fix applied at one call site is not a fix.</strong> Four separate instances &mdash; the
+    Databricks transpile, the partition index, the feed abort, the type annotation. The new guards assert
+    the <em>wiring</em> rather than the unit, because that is the failure mode a green suite does not
+    catch.
+  </p>
+</div>
+
+<div class="section-group" id="rel-components">
+  <h2>One Image, Six Components &mdash; what actually decides which is which <span class="type-badge type-verify">Deployment</span></h2>
+  <p class="summary">
+    Every QueryStudio pod runs the <strong>same image</strong>. The natural assumption is that some
+    environment variable says &ldquo;this one is the Published API&rdquo; or &ldquo;this one is
+    Reports&rdquo;. <strong>There is no such variable.</strong> Two different things are being decided,
+    and only one of them is environment at all:
+  </p>
+  <table class="info">
+    <tr><th>Question</th><th>Decided by</th></tr>
+    <tr><td><strong>Which routes does this pod serve?</strong></td><td><strong>Nothing.</strong> Every API pod serves <em>every</em> route. There is no route-group toggle anywhere in the charts.</td></tr>
+    <tr><td><strong>Which traffic reaches it?</strong></td><td><strong>Kubernetes, not the app</strong> &mdash; a separate Deployment + Service + ingress hostname per component, derived from <code>componentName</code>. That is the whole point of the split: a heavy report cannot starve interactive queries, because it lands on different pods with their own CPU and memory.</td></tr>
+    <tr><td><strong>Does it run background daemons?</strong></td><td><code>QS_POD_ROLE</code> &mdash; the <em>only</em> env var that changes application behaviour.</td></tr>
+    <tr><td><strong>What process starts?</strong></td><td>The container <code>command</code> in the chart (<code>python -m main</code> vs a <code>querystudio</code> subcommand).</td></tr>
+  </table>
+
+  <h3>Component by component</h3>
+  <table class="info">
+    <tr>
+      <th>Component</th><th>Chart</th><th>Process</th>
+      <th><code>QS_POD_ROLE</code></th><th>Port</th><th>Daemons</th><th>Other env</th>
+    </tr>
+    <tr>
+      <td><strong>QueryStudio API</strong><br><code>querystudio-api</code></td>
+      <td><code>api/</code></td><td><code>python -m main</code></td>
+      <td><code>api</code></td><td>8000</td><td>No</td>
+      <td><code>QS_WORKER_SECRET</code> (HMAC to talk to query workers)</td>
+    </tr>
+    <tr>
+      <td><strong>Published API</strong><br><code>querystudio-published-api</code></td>
+      <td><code>published-api/</code></td><td><code>python -m main</code></td>
+      <td><code>api</code></td><td>8003</td><td>No</td><td>&mdash;</td>
+    </tr>
+    <tr>
+      <td><strong>Reports API</strong><br><code>querystudio-reports</code></td>
+      <td><code>reports/</code></td><td><code>python -m main</code></td>
+      <td><code>api</code></td><td>8004</td><td>No</td><td>&mdash;</td>
+    </tr>
+    <tr>
+      <td><strong>Query worker</strong><br><code>querystudio-worker</code></td>
+      <td><code>worker/</code></td><td><code>querystudio webserver</code></td>
+      <td><code>api</code></td><td>8000</td><td>No</td>
+      <td><code>QS_WORKER_SECRET</code> (<em>required</em> &mdash; the pod refuses to start without it)</td>
+    </tr>
+    <tr>
+      <td><strong>Scheduler</strong><br><code>querystudio-scheduler</code></td>
+      <td><code>scheduler/</code></td><td><code>querystudio scheduler</code></td>
+      <td><strong><code>worker</code></strong></td><td>8001</td>
+      <td><strong>YES &mdash; the only one</strong></td><td>&mdash;</td>
+    </tr>
+    <tr>
+      <td><strong>Feed worker</strong><br><code>querystudio-feed-worker</code></td>
+      <td><code>feed-worker/</code></td><td><code>querystudio etl-worker</code></td>
+      <td><code>api</code> <em>(template default &mdash; no key in values)</em></td>
+      <td>8004</td><td>No</td><td>&mdash;</td>
+    </tr>
+  </table>
+
+  <p class="summary">
+    Read the first three rows together: <strong>identical process, identical role, identical env.</strong>
+    The API, Published API and Reports pods are the same application, distinguished only by which
+    Deployment they belong to, which hostname routes to them, and how much CPU and memory they get. If
+    you exec into a Reports pod and curl an interactive query route, it will answer &mdash; nothing in the
+    app knows it is &ldquo;the reports pod&rdquo;.
+  </p>
+
+  <h3>The one that matters operationally</h3>
+  <p class="summary">
+    <strong><code>scheduler</code> is the only component with <code>QS_POD_ROLE=worker</code></strong>,
+    so it is the only pod running scheduled reports and feeds, retention sweeps, Iceberg metadata sync,
+    the brain mirrors and prefetch, the DQ and SLA scanners, the Kafka consumer, agents and DataFlow.
+    <strong>If it is down, none of that runs anywhere in the fleet</strong> &mdash; and nothing else
+    reports an error, because every other pod is doing exactly what it was told to do. Confirm it is
+    healthy before scaling the API tier.
+  </p>
+
+  <h3>Two naming traps</h3>
+  <table class="info">
+    <tr><th>Trap</th><th>Why it bites</th></tr>
+    <tr><td>There are <strong>two</strong> keys called <code>role</code></td><td><code>pod.role</code> becomes <code>QS_POD_ROLE</code> and decides daemons. <code>config.app.role</code> is a descriptive label (feed-worker sets it to <code>"feed-worker"</code>) and is <strong>not</strong> read by <code>core/pod_role.py</code>. Only <code>api</code>, <code>worker</code> and <code>hybrid</code> are valid roles; anything else logs <code>Unknown QS_POD_ROLE=...</code> and falls back to <code>hybrid</code>, i.e. the FULL daemon fleet.</td></tr>
+    <tr><td>&ldquo;worker&rdquo; means two different things</td><td>The <code>worker/</code> chart is a <strong>query</strong> worker &mdash; it runs a webserver with <code>QS_POD_ROLE=api</code> and no daemons. The pod that behaves as a background <em>worker</em> is <code>scheduler/</code>. The chart named <code>worker</code> is not the one with <code>role: worker</code>.</td></tr>
+  </table>
+  <p class="summary">
+    <code>feed-worker</code> sets no <code>pod.role</code> at all and relies on the template default
+    <code>"api"</code>. Correct today, but implicit &mdash; if that default ever changes, the feed pods
+    silently acquire the whole daemon fleet. Setting it explicitly, as the other charts do, would remove
+    the dependency.
+  </p>
+</div>
+
+<div class="section-group" id="rel-local-api-mode">
+  <h2>Running Locally in API Mode <span class="type-badge type-verify">Testing</span></h2>
+  <p class="summary">
+    The pod role decides whether background daemons start. It is resolved once per process by
+    <code>core/pod_role.py</code>, in this precedence order:
+  </p>
+  <table class="info">
+    <tr><th>#</th><th>Source</th><th>Notes</th></tr>
+    <tr><td>1</td><td><code>QS_POD_ROLE</code> environment variable</td><td>Explicit operator choice &mdash; always wins.</td></tr>
+    <tr><td>2</td><td><code>pod_role</code> in config <span class="type-badge type-critical">INERT</span></td><td><strong>This tier does NOT work.</strong> <code>_resolve_role()</code> reads <code>getattr(core.config, "pod_role", "")</code>, and <code>core/config.py</code> defines no such attribute &mdash; so a <code>pod_role</code> key in <code>config.json</code> is silently ignored and the role falls through to <code>hybrid</code>. Verified 2026-08-19.</td></tr>
+    <tr><td>3</td><td><code>"hybrid"</code></td><td><strong>The default</strong>, for back-compat &mdash; and it starts everything.</td></tr>
+  </table>
+  <p class="summary">
+    So in practice there is <strong>one</strong> working channel: the
+    <code>QS_POD_ROLE</code> environment variable. That is fine in the cluster &mdash; every chart
+    (<code>api</code>, <code>published-api</code>, <code>reports</code>, <code>feed-worker</code>)
+    renders <code>pod.role</code> straight into the <code>QS_POD_ROLE</code> env var, so the
+    <code>role: "api"</code> flip in the API values file takes effect as intended. It matters
+    <em>locally</em>: putting <code>"pod_role": "api"</code> in <code>backend/config.json</code> looks
+    like it should work, does nothing, and leaves you running the full daemon fleet while believing you
+    are in API mode. Set the env var.
+  </p>
+
+  <h3>1. VS Code &mdash; use the launch config</h3>
+  <p class="summary">
+    <code>.vscode/launch.json</code> now carries three QueryStudio backend configurations. Pick the first
+    one from the Run and Debug dropdown:
+  </p>
+  <table class="info">
+    <tr><th>Configuration</th><th><code>QS_POD_ROLE</code></th><th>What starts</th></tr>
+    <tr><td><strong>QS: backend API only (no daemons)</strong></td><td><code>api</code></td><td>HTTP surface only. <code>should_run()</code> returns False for <em>every</em> background daemon.</td></tr>
+    <tr><td>QS: backend worker (daemons + scheduler)</td><td><code>worker</code></td><td><code>scheduler_worker.py</code> &mdash; daemons, scheduler and the retention sweeps. Run it <em>alongside</em> the API config when you need to debug a schedule or a feed.</td></tr>
+    <tr><td>QS: backend hybrid (everything in one process)</td><td><code>hybrid</code></td><td>The previous behaviour, kept for reproducing pre-split issues. Expect a much larger footprint.</td></tr>
+  </table>
+  <p class="summary">
+    The old <code>QS: backend API</code> config set <strong>no</strong> role, so it resolved to
+    <code>hybrid</code> and started the entire brain fleet inside the debug process &mdash; prewarm,
+    custom_jobs, mirrors, the Kafka consumer, the DQ scanner, agents, DataFlow, the SLA scanner, adaptive
+    prefetch and the retention sweeps. That is the same posture that had the <em>API pod</em> above 20 GB
+    in production on 2026-07-02, which is what <code>QS_POD_ROLE</code> was introduced to fix.
+  </p>
+
+  <h3>2. From a terminal &mdash; every launch form</h3>
+  <p class="summary">
+    <code>QS_POD_ROLE</code> is read <em>lazily</em>, on the first call to
+    <code>pod_role.current()</code>, and every call site sits inside a function or a
+    <code>startup</code> handler &mdash; never at import time. So setting it in the shell works for all
+    three forms below. Run from <code>backend/</code>; the server binds
+    <code>0.0.0.0:8000</code> by default (<code>server.host</code> / <code>server.port</code>).
+  </p>
+  <pre><code># PowerShell
+$env:QS_POD_ROLE = "api"; python main.py
+
+# Git Bash
+QS_POD_ROLE=api python main.py
+
+# uvicorn directly
+$env:QS_POD_ROLE = "api"; uvicorn main:app --host 0.0.0.0 --port 8000
+
+# the querystudio CLI  -- read the warning below first
+$env:QS_POD_ROLE = "api"; querystudio webserver</code></pre>
+
+  <h3>3. <code>querystudio webserver</code> is NOT API-only on its own <span class="type-badge type-critical">Gotcha</span></h3>
+  <p class="summary">
+    The subcommand name promises exactly what you want, and it does something narrower. It sets
+    <code>QUERYSTUDIO_SCHEDULER_MODE=external</code> &mdash; the <strong>legacy</strong> gate &mdash;
+    which turns off <strong>three</strong> daemons: <code>iceberg_metadata_sync</code>,
+    <code>iceberg_manifest_watcher</code> and <code>brain_duckdb_mirror</code>. Everything else still
+    starts: prewarm, custom_jobs, the remaining mirrors, the Kafka consumer, the DQ scanner, agents,
+    DataFlow, the SLA scanner, adaptive prefetch and the retention sweeps.
+  </p>
+  <p class="summary">
+    That gap is the whole reason <code>QS_POD_ROLE</code> exists &mdash; it was the 2026-07-02 finding
+    that the API pod paid for the entire brain fleet despite <code>scheduler.mode=external</code>. None
+    of the CLI subcommands expose a role flag (<code>--host</code>, <code>--port</code> and
+    <code>--workers</code> are all they take), so set the env var alongside it. The env var wins over
+    the legacy mode, so the combined form above does give you a genuine API-only process.
+  </p>
+
+  <h3>4. Why it cannot be a <code>uvicorn</code> flag</h3>
+  <p class="summary">
+    <code>uvicorn main:app</code> <em>imports</em> the module and looks up the <code>app</code> object.
+    There is no channel for passing a value through an import, and uvicorn rejects options it does not
+    recognise &mdash; its CLI accepts only its own. More decisively, <code>--workers N</code> makes
+    uvicorn <strong>fork and re-import</strong>: each child re-runs module import from scratch, so
+    environment variables are inherited but function arguments held in the parent are not. Any flag would
+    have to end up in <code>os.environ</code> anyway to reach the workers, which is why the role was
+    designed as an env var rather than a parameter.
+  </p>
+  <p class="summary">
+    One caveat if you use raw <code>uvicorn</code> instead of <code>python main.py</code>: you bypass
+    <code>run_server()</code>, which sets <code>WindowsSelectorEventLoopPolicy</code> on Windows and
+    wires SSL from <code>server.ssl_certfile</code> / <code>ssl_keyfile</code>. Neither usually matters
+    for local API testing, but the event-loop policy is the one that occasionally bites on Windows.
+  </p>
+
+  <h3>5. Confirming it actually took</h3>
+  <p class="summary">
+    Two checks, because a role that silently fell back to <code>hybrid</code> looks identical at the HTTP
+    surface:
+  </p>
+  <pre><code>python -c "import sys; sys.path.insert(0,'.'); from core.pod_role import current; \
+print(current().is_api())"     # run from backend/ with QS_POD_ROLE=api set  -> True</code></pre>
+  <p class="summary">
+    And in the startup log: an API-mode process should show <strong>no</strong> daemon-start lines
+    (prewarm, mirrors, <code>[retention] registered ...</code>, Kafka consumer). If you see them, the role
+    fell back &mdash; an unrecognised value logs
+    <code>Unknown QS_POD_ROLE=...; falling back to 'hybrid'</code> and keeps going.
+  </p>
+
+  <h3>6. What you lose in API mode &mdash; and what still works</h3>
+  <table class="info">
+    <tr><th>Still works</th><th>Does NOT run (start the worker for these)</th></tr>
+    <tr>
+      <td>Every HTTP route: queries, the visual builder, published views, reports, connections, admin. Ad-hoc execution against S3/parquet and every SQL connector. Row security. The pruning brain on the query path.</td>
+      <td>Scheduled reports and feeds. Retention sweeps. Iceberg metadata sync and the manifest watcher. Brain mirrors and prefetch. The DQ scanner, SLA scanner, Kafka consumer, agents and DataFlow.</td>
+    </tr>
+  </table>
+  <p class="summary">
+    For the connector testing described above, API mode is the right choice: everything on the query path
+    is present, and the memory the brain fleet would otherwise consume stays free for DuckDB.
+  </p>
+</div>
+
+<div class="section-group" id="rel-action-required">
+  <h2>Action Required Before / After Deploy <span class="type-badge type-verify">Operator</span></h2>
+  <p class="summary">Everything above is committed. These items need a human decision or a live check.</p>
+
+  <table class="info">
+    <tr><th>#</th><th>Action</th><th>Why</th></tr>
+    <tr><td>1</td><td><strong>Confirm exactly one <code>role="worker"</code> pod is healthy</strong> before deploying the <code>role: "api"</code> flip</td><td>The API pod no longer runs background daemons. If the scheduler pod is down, retention sweeps and scheduled jobs stop fleet-wide. Revert by setting <code>pod.role</code> back to <code>"hybrid"</code> &mdash; nothing else changes.</td></tr>
+    <tr><td>2</td><td><strong>Re-run the failing query and read the first line of the error</strong></td><td>It now names the actual exception instead of the boot banner. That line determines the next fix.</td></tr>
+    <tr><td>3</td><td><strong>Grep the pod log for <code>PARTITION-PRUNING ALARM</code></strong></td><td>If present, the predicate was lost and the query scanned the whole table &mdash; the message names which shape.</td></tr>
+    <tr><td>4</td><td><strong>DONE &mdash; but read this before any dependency bump.</strong> <code>sqlglot</code> is now capped <code>&gt;=25.0.0,&lt;31.0.0</code>. It was NOT precautionary: 30.17.0 &mdash; the version in the deployed pod &mdash; inverted <code>NOT LIKE</code>, and the repo&rsquo;s own suite failed 11 data-loss tests the moment that version was installed. Re-run the partition and negation suites before raising the cap.</td></tr>
+    <tr><td>5</td><td><strong>DONE</strong> &mdash; <code>config.example.json</code> now matches the code defaults</td><td>It set <code>iceberg.column_stats_sync_enabled</code> and <code>plain_parquet.brain_enabled</code> to <code>false</code>, overriding code defaults of <code>true</code>, so a by-the-book install was LESS capable than an unconfigured one. Both flipped to <code>true</code>.</td></tr>
+    <tr><td>6</td><td><strong>DONE</strong> &mdash; the four retention sweeps now run on the <em>scheduler</em> pod</td><td>They were inline closures in <code>main.py</code> startup, so they ran wherever the HTTP app ran and nowhere else &mdash; gating them alone would have meant they ran on NO pod. Extracted to <code>core/retention_daemons.py</code> and registered in <code>scheduler_worker.py</code>, so the API pod can decline them.</td></tr>
+    <tr><td>7</td><td><strong>Re-test any saved Starburst query that uses paging or a date filter</strong></td><td>Both were broken on that path and both changed shape: pagination now emits <code>OFFSET m LIMIT n</code>, and a date/boolean/numeric filter now emits a TYPED literal. Queries that previously failed should now run; queries that silently returned nothing (the <code>&#39;007&#39;</code> case) will now return rows.</td></tr>
+    <tr><td>8</td><td><strong>Expect published views and feeds to FAIL where they previously ran</strong> &mdash; if any had an unrenderable filter</td><td>An unknown operator or a half-supplied <code>BETWEEN</code> used to be dropped silently, which returned MORE rows than the filter asked for; a feed whose wrap failed delivered the unfiltered table. Both now raise. A failure here is not a regression &mdash; it is a previously silent wrong answer becoming visible. Fix the filter definition.</td></tr>
+    <tr><td>9</td><td><strong>Audit row-security coverage on SQL connectors, then expect scheduled reports with an unresolvable owner to FAIL</strong></td><td>Visual queries against Trino/Snowflake/Databricks/Oracle/Athena were running with NO row security &mdash; check whether any policy-governed table was reachable that way. Separately, a scheduled report whose owner cannot be resolved (AD down) now fails instead of delivering a governed table unfiltered. If a job starts failing, the AD lookup is the thing to fix &mdash; it was previously widening its output silently.</td></tr>
+    <tr><td>10</td><td><strong>Frontend follow-up (optional):</strong> send <code>data_type</code> on each filter</td><td><code>FilterModel</code> now accepts it and the backend resolves types from the catalog when it is absent (one cached <code>DESCRIBE</code> per table). Sending it from the UI, which already has the column types, removes that round-trip entirely.</td></tr>
+  </table>
+
+  <h3>Verifying pod roles at runtime</h3>
+  <p class="summary">Minimal images may not ship <code>env</code>; read the spec from the API side instead of exec&rsquo;ing into the container.</p>
+  <pre class="code cmd">kubectl get pod &lt;api-pod&gt; -o jsonpath='{range .spec.containers[*].env[*]}{.name}={.value}{"\n"}{end}' | grep -E 'QS_POD_ROLE|SCHEDULER'
+kubectl logs &lt;api-pod&gt; | grep -E '\[pod_role' | head -30
+kubectl logs &lt;api-pod&gt; | grep 'PARTITION-PRUNING ALARM'</pre>
+  <p class="summary">
+    Each daemon now logs its own decision, e.g.
+    <code>[pod_role=api] SKIP background daemon dq_scheduled_loop</code> or
+    <code>[pod_role=hybrid] SKIP background daemon etl_cleanup (scheduler.mode=external, from config)</code> &mdash;
+    so &ldquo;is this pod running background work?&rdquo; is answerable from the log alone.
+  </p>
+</div>
+
+<div class="section-group" id="checklist">
+  <h2><span class="step-num">1</span> Pre-Deployment Checklist <span class="type-badge type-verify">Checklist</span></h2>
+  <p class="summary">Verify all items before starting the deployment. Code items are already done; infrastructure items need your OpenShift admin.</p>
+
+  <ul class="checklist">
+    <li class="done">2,038 backend + 147 Vitest tests pass (<code>cd backend && python -m pytest</code> + <code>cd frontend && npx vitest run</code>)</li>
+    <li class="done">Frontend build clean (<code>cd frontend && npm run build</code>)</li>
+    <li class="done">Phase 115 merged: DuckDB S3 credential quoting, CORS/multi-pod startup warnings, role centralization</li>
+    <li class="done">Phase 116 merged: AdminPage split (13 sections → components/admin/), Vitest setup, 3 query builder hooks</li>
+    <li class="done">Phase 117 merged: shared TypeScript types, @ts-nocheck removed from 10 files, ARIA accessibility</li>
+    <li class="done">Phase 118 merged: cache abstraction layer (LocalCache + RedisBroadcastCache), 3 caches migrated, multi-pod docs</li>
+    <li class="done">Phase 119 merged: config-based proxy support for AWS S3 on OpenShift — <code>proxy</code> config section, <code>core/proxy_utils.py</code> (8 functions), injected into boto3/DuckDB/httpx/requests (20 files, 31 tests). On-prem bypass enforced: every call site passes <code>endpoint_url</code> checked against <code>no_proxy</code> list; <code>setup_proxy_env()</code> sets <code>NO_PROXY</code> at startup. On-prem unaffected (disabled by default).</li>
+    <li class="done">Mixed TLS routing: UI=edge (HAProxy→HTTP), API=passthrough (uvicorn→HTTPS), separate hostnames</li>
+    <li class="done">Runtime API URL injection: <code>/config.json</code> ConfigMap mount → <code>window.APP_CONFIG</code> (main.tsx fetches before App loads — no rebuild per env)</li>
+    <li class="done">Separate Helm charts: <code>querystudio-api/</code> (backend) + <code>querystudio-ui/</code> (frontend) — independent release cycles</li>
+    <li class="done">CRA leftover removed: <code>frontend/public/index.html</code> was overwriting Vite's built <code>dist/index.html</code> — blank page in OpenShift fixed</li>
+    <li class="done">Split-host fixes: WebSocket URL, 4 raw fetch calls, AuthContext auth calls, 3 display URL double-origins — all prefixed with <code>API_BASE_URL</code></li>
+    <li class="done">UI image uses <code>serve</code> (npm) — no nginx, no entrypoint sed, no env var injection; Helm ConfigMap is the only source of runtime apiUrl</li>
+    <li class="done">DuckDB temp_directory configured for PVC (<code>DUCKDB_TEMP_DIR</code>)</li>
+    <li class="done">Presigned download temp dir on PVC (<code>QS_DOWNLOAD_TEMP_DIR</code>)</li>
+    <li class="done">Orphaned temp cleanup scheduler job added (every 30 min)</li>
+    <li class="todo">Container images built and pushed to registry (API + UI — separate images)</li>
+    <li class="todo">NFS/PVC provisioned and tested (ReadWriteMany)</li>
+    <li class="todo">Secrets created in OpenShift (encryption key, AD password, TLS cert for API)</li>
+    <li class="todo">ConfigMap reviewed with production values (auth, cache, S3)</li>
+    <li class="todo"><strong>Two</strong> DNS records created: <code>querystudio-ui.apps.cluster</code> + <code>querystudio-api.apps.cluster</code></li>
+    <li class="todo">CORS <code>allow_origins</code> set to exact UI hostname in <code>k8s/helm/querystudio-api/config/production.json</code></li>
+    <li class="todo">Redis enabled for multi-pod cache coherence (<code>cache.coherence_mode: redis_broadcast</code>)</li>
+    <li class="todo">AD/LDAP server reachable from OpenShift pods (<code>oc exec ... -- nc -zv dc.company.com 636</code>)</li>
+    <li class="todo">If <code>auth.type=ad</code> + LDAPS: AD CA Secret created (<code>oc create secret generic ad-ca --from-file=ca.crt=./ad-ca.crt</code>) and <code>auth.adCa.enabled=true</code> set in Helm — OR <code>"ad_tls_validate": false</code> in config.json (dev only)</li>
+    <li class="todo">S3 endpoints reachable from OpenShift pods (proxy if needed)</li>
+    <li class="todo">Encryption key generated and stored in Secret</li>
+    <li class="todo">TLS cert Secret created for API pods (<code>querystudio-tls</code>) — UI pod does NOT need cert (edge termination)</li>
+  </ul>
+</div>
+
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<div class="section-group" id="architecture">
+  <h2><span class="step-num">2</span> Architecture Overview <span class="type-badge type-infra">Architecture</span></h2>
+  <p class="summary"><strong>Split architecture</strong>: API pods (Python/FastAPI HTTPS, passthrough TLS) + UI pod (React SPA, HTTP — HAProxy terminates TLS via edge Route). All API pods share the same image with different <code>command</code> and share NFS/PVC at <code>/app/data</code>. <strong>Separate hostnames required</strong> — passthrough TLS cannot do path-based routing on the same host. Runtime API URL injected via <code>/config.json</code> ConfigMap (subPath-mounted in the UI pod; <code>main.tsx</code> fetches it before the React app loads — no image rebuild per environment).</p>
+
+  <div class="arch-diagram">
+  ┌───────────────────────────────────────────────────────────────────────┐
+  │                    OpenShift Router (HAProxy)                         │
+  │   Route 1: querystudio-ui.apps.cluster  → edge termination           │
+  │   Route 2: querystudio-api.apps.cluster → passthrough termination    │
+  └────────────────────────┬──────────────────────────┬───────────────────┘
+                           │                          │
+        HTTPS (HAProxy→HTTP)│                          │HTTPS (end-to-end)
+                           │                          │
+              ┌────────────▼────────┐      ┌──────────▼──────────┐
+              │      UI ×2          │      │      API ×3          │
+              │  React SPA          │      │  FastAPI + uvicorn   │
+              │  HTTP:8080          │      │  HTTPS:8000          │
+              │  /config.json       │      │  TLS cert mounted    │
+              │  (ConfigMap mount)  │      │  WebSocket / Stream  │
+              └─────────────────────┘      └──────────┬───────────┘
+                                                      │
+                         ┌────────────────────────────┼────────────────┐
+                         │                            │                │
+              ┌──────────▼──────┐      ┌──────────────▼──┐  ┌─────────▼───┐
+              │  Executor ×N    │      │  Scheduler ×1    │  │  NFS / PVC  │
+              │  HPA: 2-10      │      │  APScheduler     │  │  /app/data  │
+              │  HTTPS:8002     │      │  HTTPS:8001      │  │  50Gi+ RWX  │
+              │  DuckDB workers │      │  strategy:       │  └─────────────┘
+              └─────────────────┘      │  Recreate        │
+                                       └──────────────────┘
+  Redis (optional): cache coherence (redis_broadcast) + queue backend</div>
+
+  <div class="reason"><strong>Why separate hostnames?</strong> OpenShift passthrough TLS routes by SNI hostname only — HAProxy cannot inspect HTTP paths. Path-based routing (<code>/api/*</code>, <code>/auth/*</code>) is impossible with passthrough. Solution: UI uses <strong>edge</strong> (HAProxy terminates TLS → plain HTTP to pod) and API uses <strong>passthrough</strong> (uvicorn holds the cert, end-to-end HTTPS). Each gets its own hostname.</div>
+
+  <table class="info">
+    <tr><th>Component</th><th>Replicas</th><th>Port</th><th>CPU</th><th>Memory</th><th>Notes</th></tr>
+    <tr><td>API</td><td>3</td><td>8000 (HTTPS)</td><td>500m → 2</td><td>1Gi → 4Gi</td><td>FastAPI + uvicorn HTTPS, WebSocket, streaming. TLS cert mounted from Secret. Route: passthrough.</td></tr>
+    <tr><td>UI</td><td>2</td><td>8080 (HTTP)</td><td>100m → 500m</td><td>128Mi → 256Mi</td><td>React SPA served by <code>serve</code> (npm). Pod serves plain HTTP. HAProxy terminates TLS via edge Route. <code>main.tsx</code> fetches <code>/config.json</code> (ConfigMap subPath-mounted at <code>/app/build/config.json</code>) → <code>window.APP_CONFIG.apiUrl</code>.</td></tr>
+    <tr><td>Scheduler</td><td><strong>1</strong></td><td>8001 (HTTPS)</td><td>250m → 1</td><td>512Mi → 2Gi</td><td>APScheduler (NOT multi-instance safe), strategy: Recreate</td></tr>
+    <tr><td>Executor</td><td>2-10 (HPA)</td><td>8002 (HTTPS)</td><td>1 → 4</td><td>2Gi → 8Gi</td><td>DuckDB queries, S3 downloads, exports</td></tr>
+    <tr><td>Published-API</td><td>2-8 (HPA)</td><td>8003 (HTTPS)</td><td>500m → 2</td><td>1Gi → 4Gi</td><td>Optional dedicated pod for /api/v1/* (opt-in)</td></tr>
+    <tr><td>Redis</td><td>1</td><td>6379</td><td>250m → 1</td><td>512Mi → 1Gi</td><td>Required for multi-pod cache coherence (<code>redis_broadcast</code>) + optional queue backend</td></tr>
+  </table>
+</div>
+
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<div class="section-group" id="prod-gaps">
+  <h2><span class="step-num">3</span> Critical Production Fixes <span class="type-badge type-critical">Critical</span></h2>
+  <p class="summary">These fixes prevent pod eviction from DuckDB temp spill and S3 download staging exhausting ephemeral storage. <strong>Already applied in codebase</strong> — just set the env vars in deployment.</p>
+
+  <div class="step-item open">
+    <div class="header">
+      <span class="file">backend/core/duckdb_subprocess.py — DuckDB Temp Directory</span>
+      <span class="action action-done">DONE</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="warning"><strong>Problem:</strong> DuckDB uses <code>:memory:</code> but spills to <code>/tmp/.duckdb/</code> when queries exceed <code>memory_limit</code>. OpenShift pods have 1-10 GB ephemeral storage. A single large S3 scan exhausts this → pod eviction.</div>
+      <div class="diff-label before">Before (duckdb_subprocess.py line 351)</div>
+<pre class="code before">con = duckdb.connect(database=":memory:")
+# No SET temp_directory — uses /tmp/.duckdb/ (ephemeral!)</pre>
+      <div class="diff-label after">After (duckdb_subprocess.py line 368)</div>
+<pre class="code after">_temp_dir = os.environ.get("DUCKDB_TEMP_DIR", "").strip()
+if _temp_dir:
+    os.makedirs(_temp_dir, exist_ok=True)
+    con.execute(f"SET temp_directory='{_temp_dir}';")
+    print(f"SUBPROCESS: DuckDB temp_directory={_temp_dir}",
+          file=sys.stderr, flush=True)</pre>
+      <div class="success"><strong>Deploy:</strong> Set <code>DUCKDB_TEMP_DIR=/app/data/tmp/duckdb</code> on executor pods. This is on the PVC, not ephemeral.</div>
+    </div>
+  </div>
+
+  <div class="step-item open">
+    <div class="header">
+      <span class="file">backend/core/duckdb_subprocess.py — Download Staging Dir</span>
+      <span class="action action-done">DONE</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="warning"><strong>Problem:</strong> <code>tempfile.mkdtemp(prefix="qs_subprocess_dl_")</code> stages downloaded Parquet files in system <code>/tmp</code>. Large tables (500+ files) exhaust ephemeral storage.</div>
+      <div class="diff-label before">Before (duckdb_subprocess.py line 222)</div>
+<pre class="code before">temp_dir = tempfile.mkdtemp(prefix="qs_subprocess_dl_")</pre>
+      <div class="diff-label after">After (duckdb_subprocess.py line 222)</div>
+<pre class="code after">_dl_base = os.environ.get("QS_DOWNLOAD_TEMP_DIR", "").strip() or None
+if _dl_base:
+    os.makedirs(_dl_base, exist_ok=True)
+temp_dir = tempfile.mkdtemp(prefix="qs_subprocess_dl_", dir=_dl_base)</pre>
+      <div class="success"><strong>Deploy:</strong> Set <code>QS_DOWNLOAD_TEMP_DIR=/app/data/tmp/downloads</code> on executor pods.</div>
+    </div>
+  </div>
+
+  <div class="step-item open">
+    <div class="header">
+      <span class="file">backend/core/scheduler.py — Orphaned Temp Cleanup</span>
+      <span class="action action-done">DONE</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="reason"><strong>Safety net:</strong> APScheduler job <code>__subprocess_temp_cleanup__</code> runs every 30 min. Deletes entries in <code>DUCKDB_TEMP_DIR</code> and <code>QS_DOWNLOAD_TEMP_DIR</code> older than 1 hour (covers crashed/OOM-killed subprocesses). Logs freed space.</div>
+      <table class="info">
+        <tr><th>Scenario</th><th>Cleanup Mechanism</th></tr>
+        <tr><td>Normal query completion</td><td>DuckDB auto-cleans spill; <code>finally</code> block deletes download staging</td></tr>
+        <tr><td>Subprocess crash / OOM-kill</td><td>Scheduler job deletes orphans &gt; 1 hour old</td></tr>
+        <tr><td>PVC running low</td><td><code>__storage_quota__</code> job enforces cache + downloads limits</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <h3>Executor Env Vars (auto-injected by Helm chart)</h3>
+  <table class="info">
+    <tr><th>Env Var</th><th>Value</th><th>Purpose</th></tr>
+    <tr><td><code>DUCKDB_MEMORY_LIMIT</code></td><td><code>6GB</code></td><td>Cap DuckDB memory (leave 2GB for Python + overhead)</td></tr>
+    <tr><td><code>DUCKDB_THREADS</code></td><td><code>4</code></td><td>Match executor CPU limit</td></tr>
+    <tr><td><code>DUCKDB_TEMP_DIR</code></td><td><code>/app/data/tmp/duckdb</code></td><td>Spill to PVC, not ephemeral</td></tr>
+    <tr><td><code>QS_DOWNLOAD_TEMP_DIR</code></td><td><code>/app/data/tmp/downloads</code></td><td>Download staging on PVC</td></tr>
+    <tr><td><code>TMPDIR</code></td><td><code>/app/data/tmp</code></td><td>General temp on PVC</td></tr>
+  </table>
+</div>
+
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<div class="section-group" id="docker-build">
+  <h2><span class="step-num">4</span> Docker Image Build <span class="type-badge type-deploy">Build</span></h2>
+  <p class="summary">Multi-stage build: <code>node:20-alpine</code> for React frontend, <code>python:3.11-slim</code> for backend. Non-root UID 1001 with GID 0 for OpenShift compatibility.</p>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Step 1: Verify source</span>
+      <span class="action action-run">RUN</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label cmd">Commands</div>
+<pre class="code cmd">cd c:/DEV/outputs
+
+# Ensure clean state
+git status
+git log --oneline -5
+
+# Verify tests pass
+cd backend && source venv/Scripts/activate && python -m pytest
+cd ../frontend && npm run build</pre>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Step 2: Build image</span>
+      <span class="action action-run">RUN</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label cmd">Docker build</div>
+<pre class="code cmd">cd c:/DEV/outputs
+
+# Build API image (backend only)
+docker build -t querystudio-api:2.1.0 -t querystudio-api:latest \
+  --build-arg VERSION=2.1.0 -f Dockerfile.api .
+
+# Build UI image (serve npm + React SPA — no nginx, no entrypoint scripts)
+docker build -t querystudio-ui:2.1.0 -t querystudio-ui:latest \
+  --build-arg VERSION=2.1.0 -f Dockerfile.ui .</pre>
+      <div class="reason"><strong>Build stages:</strong> (1) <code>node:20-alpine</code> — npm ci + npm run build → React bundle. (2) <code>python:3.11-slim</code> — install system deps, create UID 1001 user, pip install, copy source + frontend build, create data dirs with g=u permissions.</div>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Step 3: Smoke test locally</span>
+      <span class="action action-verify">VERIFY</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label cmd">Commands</div>
+<pre class="code cmd"># Quick standalone test
+docker run --rm -p 8000:8000 \
+  -e QUERYSTUDIO_AUTH_TYPE=none \
+  querystudio-api:2.1.0
+
+# In another terminal:
+curl http://localhost:8000/health/live
+# Expected: {"status": "ok"}
+
+# UI smoke test (needs API running)
+docker run --rm -p 3000:8080 querystudio-ui:2.1.0</pre>
+    </div>
+  </div>
+</div>
+
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<div class="section-group" id="registry-push">
+  <h2><span class="step-num">5</span> Container Registry Push <span class="type-badge type-deploy">Push</span></h2>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Option A: OpenShift Internal Registry</span>
+      <span class="action action-config">CONFIG</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label cmd">Commands</div>
+<pre class="code cmd">oc login https://api.your-cluster.example.com:6443
+
+# Expose internal registry
+oc patch configs.imageregistry.operator.openshift.io/cluster \
+  --type merge -p '{"spec":{"defaultRoute":true}}'
+
+REGISTRY=$(oc get route default-route -n openshift-image-registry \
+  -o jsonpath='{.spec.host}')
+
+docker login -u $(oc whoami) -p $(oc whoami -t) $REGISTRY
+
+# Push API image
+docker tag querystudio-api:2.1.0 $REGISTRY/querystudio-prod/querystudio-api:2.1.0
+docker tag querystudio-api:2.1.0 $REGISTRY/querystudio-prod/querystudio-api:latest
+docker push $REGISTRY/querystudio-prod/querystudio-api:2.1.0
+docker push $REGISTRY/querystudio-prod/querystudio-api:latest
+
+# Push UI image
+docker tag querystudio-ui:2.1.0 $REGISTRY/querystudio-prod/querystudio-ui:2.1.0
+docker tag querystudio-ui:2.1.0 $REGISTRY/querystudio-prod/querystudio-ui:latest
+docker push $REGISTRY/querystudio-prod/querystudio-ui:2.1.0
+docker push $REGISTRY/querystudio-prod/querystudio-ui:latest</pre>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Option B: External Registry (Artifactory / Quay / Harbor)</span>
+      <span class="action action-config">CONFIG</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label cmd">Commands</div>
+<pre class="code cmd">docker login registry.company.com
+
+docker tag querystudio:2.1.0 registry.company.com/querystudio/querystudio:2.1.0
+docker push registry.company.com/querystudio/querystudio:2.1.0</pre>
+      <div class="diff-label yaml">values.yaml override</div>
+<pre class="code yaml">image:
+  repository: registry.company.com/querystudio/querystudio
+  tag: "2.1.0"
+  pullPolicy: IfNotPresent</pre>
+      <div class="reason"><strong>Pull secret (if private registry):</strong><br><code>oc create secret docker-registry querystudio-pull-secret --docker-server=registry.company.com --docker-username=USER --docker-password=TOKEN -n querystudio-prod</code><br><code>oc secrets link default querystudio-pull-secret --for=pull -n querystudio-prod</code></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<div class="section-group" id="project-setup">
+  <h2><span class="step-num">6</span> OpenShift Project &amp; SCC <span class="type-badge type-infra">Setup</span></h2>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Create project + labels</span>
+      <span class="action action-run">RUN</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label cmd">Commands</div>
+<pre class="code cmd">oc new-project querystudio-prod --display-name="QueryStudio Production"
+
+oc label namespace querystudio-prod app=querystudio environment=production
+
+oc annotate namespace querystudio-prod \
+  "openshift.io/description=QueryStudio Enterprise Parquet Query Engine"</pre>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Security Context Constraints (SCC)</span>
+      <span class="action action-config">CONFIG</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="reason">QueryStudio runs as <strong>UID 1001</strong> (non-root) with <strong>GID 0</strong> (root group). The default <code>restricted</code> SCC in OCP 4.x is compatible. If UID 1001 is outside the namespace range:</div>
+      <div class="diff-label cmd">Verify / fix SCC</div>
+<pre class="code cmd"># Verify restricted SCC allows UID 1001
+oc get scc restricted -o yaml | grep -A5 runAsUser
+
+# If needed — use restricted-v2:
+oc adm policy add-scc-to-user restricted-v2 -z default -n querystudio-prod</pre>
+    </div>
+  </div>
+</div>
+
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<div class="section-group" id="storage">
+  <h2><span class="step-num">7</span> Storage (PVC / NFS) <span class="type-badge type-infra">Storage</span></h2>
+  <p class="summary">All 3 deployments share the same PVC at <code>/app/data</code>. <strong>ReadWriteMany (RWX) is required.</strong> The Helm chart handles PVC creation — you just configure which mode.</p>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Option A: BYOS NFS (Recommended for Enterprise)</span>
+      <span class="action action-config">CONFIG</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label yaml">my-values.yaml</div>
+<pre class="code yaml">persistence:
+  size: 200Gi
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    enabled: true
+    server: "nfs-server.corp.example.com"
+    path: "/exports/querystudio-prod"
+    mountOptions:
+      - nfsvers=4.1
+      - rsize=1048576
+      - wsize=1048576
+      - hard
+      - timeo=600
+      - retrans=2</pre>
+      <div class="warning"><strong>NFS server prerequisite:</strong> <code>mkdir -p /exports/querystudio-prod && chmod 0775 /exports/querystudio-prod && chown 1001:0 /exports/querystudio-prod</code></div>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Option B: Dynamic Provisioner (CephFS / GlusterFS / EFS)</span>
+      <span class="action action-config">CONFIG</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label yaml">my-values.yaml</div>
+<pre class="code yaml">persistence:
+  storageClass: "ocs-storagecluster-cephfs"
+  size: 200Gi
+  accessModes:
+    - ReadWriteMany</pre>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Option C: Existing PVC</span>
+      <span class="action action-config">CONFIG</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label yaml">my-values.yaml</div>
+<pre class="code yaml">persistence:
+  existingClaim: "my-existing-querystudio-pvc"</pre>
+    </div>
+  </div>
+
+  <h3>What Lives on the PVC</h3>
+  <table class="info">
+    <tr><th>Directory</th><th>Contents</th><th>Est. Size</th></tr>
+    <tr><td><code>data/cache/</code></td><td>DuckDB query result cache (Parquet)</td><td>2-10 GB</td></tr>
+    <tr><td><code>data/downloads/</code></td><td>User export downloads</td><td>5-50 GB</td></tr>
+    <tr><td><code>data/tmp/duckdb/</code></td><td>DuckDB spill (auto-cleaned)</td><td>10-40 GB</td></tr>
+    <tr><td><code>data/tmp/downloads/</code></td><td>S3 download staging (auto-cleaned)</td><td>10-30 GB</td></tr>
+    <tr><td><code>data/parquet/</code></td><td>Published view cache</td><td>2-10 GB</td></tr>
+    <tr><td><code>data/materialized_views/</code></td><td>Materialized view cache</td><td>5-20 GB</td></tr>
+    <tr><td><code>data/local_tables/</code></td><td>Local table storage</td><td>1-50 GB</td></tr>
+    <tr><td><code>data/feeds/</code></td><td>Feed file output</td><td>5-10 GB</td></tr>
+    <tr><td><code>data/*.db</code></td><td>SQLite database</td><td>&lt;1 GB</td></tr>
+  </table>
+</div>
+
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<div class="section-group" id="secrets">
+  <h2><span class="step-num">8</span> Secrets <span class="type-badge type-config">Secrets</span></h2>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Generate encryption key + create Secret</span>
+      <span class="action action-run">RUN</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label cmd">Generate Fernet key</div>
+<pre class="code cmd"># Used for encrypting S3/portal passwords at rest in DB
+python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"</pre>
+      <div class="diff-label cmd">Create the Secret</div>
+<pre class="code cmd">oc create secret generic querystudio-secrets \
+  --from-literal=QUERYSTUDIO_ENCRYPTION_KEY="YOUR_FERNET_KEY" \
+  --from-literal=AD_BIND_PASSWORD="your-ad-bind-password" \
+  -n querystudio-prod</pre>
+      <div class="warning"><strong>Important:</strong> The Helm templates need <code>envFrom</code> or <code>env[].valueFrom.secretKeyRef</code> added to reference this secret. Add to each deployment under <code>containers[].env</code>:
+<pre class="code yaml" style="margin-top:8px">- name: QUERYSTUDIO_ENCRYPTION_KEY
+  valueFrom:
+    secretKeyRef:
+      name: querystudio-secrets
+      key: QUERYSTUDIO_ENCRYPTION_KEY</pre></div>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">TLS Certificate Secret — API pods only (passthrough route)</span>
+      <span class="action action-critical">Required</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="reason"><strong>Mixed TLS architecture:</strong><br>
+        • <strong>UI pod</strong>: serves plain HTTP:8080. HAProxy terminates TLS via <em>edge</em> Route — <strong>no cert needed in the pod</strong>.<br>
+        • <strong>API pods</strong>: serve HTTPS:8000 via uvicorn (<em>passthrough</em> Route — HAProxy passes TLS through). TLS cert/key must be mounted from a K8s Secret.</div>
+      <div class="diff-label cmd">Create TLS Secret (API pods only)</div>
+<pre class="code cmd"># Option 1: From existing cert files (CN must match apiHost)
+oc create secret tls querystudio-tls \
+  --cert=tls.crt --key=tls.key \
+  -n querystudio-prod
+
+# Option 2: Use OpenShift service-ca (auto-generated self-signed)
+# Add annotation to the API Service:
+oc annotate svc querystudio-api \
+  service.beta.openshift.io/serving-cert-secret-name=querystudio-tls \
+  -n querystudio-prod
+
+# Option 3: cert-manager — create a Certificate resource targeting querystudio-tls</pre>
+      <div class="success">Helm values: <code>tls.enabled: true</code> + <code>tls.secretName: querystudio-tls</code> — mounts cert/key at <code>/app/certs/</code> in API/Scheduler/Executor pods. UI pod is unaffected (<code>tls.enabled</code> does not apply to it).</div>
+      <div class="warning"><strong>UI pod</strong>: <code>tls.enabled: false</code> in production profile — the edge Route handles HTTPS externally. Do NOT mount TLS certs in the UI pod.</div>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">AD CA Bundle Secret — required for LDAPS bind against internal AD</span>
+      <span class="action action-critical">Required if auth.type = ad</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="reason">
+        <strong>Why:</strong> Corporate AD servers use internal-CA-signed TLS certs. Pod default trust store only knows
+        public CAs, so LDAPS bind fails with <code>LDAPSocketOpenError — socket ssl error: certificate</code>. Mount a
+        Secret holding your corporate AD CA (PEM) so <code>ldap3.Tls(ca_certs_file=...)</code> can validate.
+      </div>
+      <div class="diff-label cmd">Step 1 — Export the AD CA</div>
+<pre class="code cmd"># Grab the AD server cert chain and extract the CA cert
+openssl s_client -showcerts -connect dc.company.com:636 &lt;/dev/null 2&gt;/dev/null \
+  | sed -ne '/-BEGIN CERT-/,/-END CERT-/p' &gt; ad-ca.crt
+
+# OR ask your PKI team for the corporate root CA PEM directly</pre>
+      <div class="diff-label cmd">Step 2 — Create the Secret</div>
+<pre class="code cmd">oc create secret generic ad-ca \
+  --from-file=ca.crt=./ad-ca.crt \
+  -n querystudio-prod</pre>
+      <div class="diff-label cmd">Step 3 — Enable in Helm</div>
+<pre class="code cmd">helm upgrade --install qs-api k8s/helm/querystudio-api/ \
+  -f k8s/helm/querystudio-api/profiles/production/values.yaml \
+  --set auth.adCa.enabled=true \
+  --set auth.adCa.secretName=ad-ca \
+  --namespace querystudio-prod</pre>
+      <div class="success">
+        Chart mounts the Secret at <code>/app/certs/ad-ca</code> on <strong>all 4 pods</strong>
+        (api, scheduler, executor, published-api) and exports
+        <code>QUERYSTUDIO_AUTH_AD_TLS_CA_FILE=/app/certs/ad-ca/ca.crt</code>. Backend
+        (<code>core/ad_auth.py::_make_ldap_server()</code>) passes it to <code>ldap3.Tls(ca_certs_file=...)</code>
+        during LDAPS bind.
+      </div>
+      <div class="warning">
+        <strong>Option A (dev/testing only):</strong> Skip the Secret and set
+        <code>"ad_tls_validate": false</code> in <code>config.json</code> — bind succeeds without cert validation.
+        <strong>Never use this in production.</strong>
+      </div>
+      <div class="warning">
+        <strong>FIPS / OpenShift gotcha:</strong> If <code>ad_server</code> is written as
+        <code>LDAPS://</code> (uppercase) or has stray whitespace, the case-insensitive normalisation (commit
+        <code>db66d72</code>) still detects it — but older builds would silently fall through to NTLM, which
+        triggers <code>hashlib.new('md4', ...)</code> → FIPS crash. Confirm the bind decision in logs:
+        <code>AD bind decision: ... → use_ssl=True → auth_method=SIMPLE</code>.
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<div class="section-group" id="configmap">
+  <h2><span class="step-num">9</span> ConfigMap (config.json) <span class="type-badge type-config">Config</span></h2>
+  <p class="summary">The Helm chart generates a basic ConfigMap. For production, override with comprehensive settings.</p>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Production config.json (key settings)</span>
+      <span class="action action-config">CONFIG</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label yaml">config.json (via ConfigMap or standalone)</div>
+<pre class="code yaml">{
+  "auth": {
+    "type": "ad",
+    "ad_server": "ldaps://dc.company.com",
+    "ad_domain": "company.com",
+    "ad_base_dn": "DC=company,DC=com",
+    "ad_use_ssl": true,
+    "ad_tls_validate": true,
+    "ad_tls_check_hostname": false,
+    "ad_tls_ca_file": "/app/certs/ad-ca/ca.crt",
+    "ad_connect_timeout": 3,
+    "ad_receive_timeout": 10,
+    "ad_service_account": "svc-querystudio@company.com",
+    "ad_service_password": "set-via-QUERYSTUDIO_AUTH_AD_SERVICE_PASSWORD-env"
+  },
+  "proxy": {
+    "enabled": true,
+    "url": "http://corporate-proxy.corp.com:8080",
+    "no_proxy": "localhost,169.254.169.254,.internal.com",
+    "apply_to_boto3": true,
+    "apply_to_duckdb": true,
+    "apply_to_httpx": true
+  },
+  "cache": {
+    "enabled": true,
+    "ttl_seconds": 28800,
+    "max_size_mb": 4096,
+    "partition_aware_invalidation": true,
+    "snapshot_check_ttl_seconds": 300,
+    "snapshot_sweep_interval_hours": 2,
+    "parquet_file_list_check": true
+  },
+  "query_engine": {
+    "query_timeout_seconds": 1800,
+    "max_concurrent_per_user": 3,
+    "duckdb_threads_per_query": 4,
+    "duckdb_memory_limit_mb": 6144
+  },
+  "s3": {
+    "parallel_download_workers": 8
+  },
+  "aws_portal": {
+    "proxy_host": "proxy.company.com",
+    "proxy_port": 3128
+  },
+  "published_views": {
+    "enabled": true,
+    "cache_ttl_seconds": 28800,
+    "max_concurrent": 50
+  },
+  "storage": {
+    "max_cache_size_mb": 4096,
+    "max_downloads_size_mb": 20480,
+    "downloads_expiry_days": 7
+  }
+}</pre>
+      <div class="diff-label cmd">Apply as ConfigMap</div>
+<pre class="code cmd">oc create configmap querystudio-config \
+  --from-file=config.json=./config.json \
+  -n querystudio-prod</pre>
+    </div>
+  </div>
+</div>
+
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<div class="section-group" id="helm-deploy">
+  <h2><span class="step-num">10</span> Helm Chart Deployment <span class="type-badge type-deploy">Deploy</span></h2>
+  <p class="summary">UI and API are <strong>separate Helm charts</strong> — deployed and upgraded independently. API chart: backend pods + PVC + Redis. UI chart: React SPA + edge Route + <code>/config.json</code> ConfigMap (runtime API URL).</p>
+
+  <table class="info" style="margin-bottom:16px">
+    <tr><th>Chart</th><th>Path</th><th>What it deploys</th><th>TLS</th></tr>
+    <tr><td><strong>querystudio-api</strong></td><td><code>k8s/helm/querystudio-api/</code></td><td>API + Scheduler + Executor + Redis + PVC</td><td>passthrough (uvicorn)</td></tr>
+    <tr><td><strong>querystudio-ui</strong></td><td><code>k8s/helm/querystudio-ui/</code></td><td>React SPA + <code>/config.json</code> ConfigMap (subPath-mounted)</td><td>edge (HAProxy)</td></tr>
+  </table>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Step 1: Dry run both charts</span>
+      <span class="action action-verify">VERIFY</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label cmd">Helm template (dry run)</div>
+<pre class="code cmd">cd c:/DEV/outputs
+
+# API chart — production profile
+helm template qs-api k8s/helm/querystudio-api/ \
+  -f k8s/helm/querystudio-api/profiles/production/values.yaml \
+  --namespace querystudio-prod > /tmp/qs-api-manifests.yaml
+
+# UI chart
+helm template qs-ui k8s/helm/querystudio-ui/ \
+  --namespace querystudio-prod > /tmp/qs-ui-manifests.yaml
+
+cat /tmp/qs-api-manifests.yaml
+cat /tmp/qs-ui-manifests.yaml</pre>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Step 2: Deploy API chart</span>
+      <span class="action action-run">RUN</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="warning"><strong>Runtime config lives in JSON — NOT in <code>--set</code> flags.</strong>
+        CORS origins, auth type, cache mode, queue backend are all in
+        <code>k8s/helm/querystudio-api/config/{minimal,dev,qa,production}.json</code>.
+        Edit the JSON file directly before running <code>helm upgrade</code>. The GitLab CI pipeline
+        stays untouched — no pipeline vars, no <code>oc create configmap</code>.</div>
+      <div class="diff-label before">Step A — Edit the JSON file (before helm upgrade)</div>
+<pre class="code cmd"># Open config/production.json and set CORS to your UI hostname:
+#   "cors": {
+#     "allow_origins": ["https://querystudio-ui.apps.YOUR-CLUSTER.example.com"],
+#     ...
+#   }
+$EDITOR k8s/helm/querystudio-api/config/production.json</pre>
+      <div class="diff-label cmd">Step B — Minimal (1 pod — embedded scheduler + executor)</div>
+<pre class="code cmd">helm upgrade --install qs-api k8s/helm/querystudio-api/ \
+  -f k8s/helm/querystudio-api/profiles/minimal/values.yaml \
+  --set image.tag=2.1.0 \
+  --set persistence.existingClaim=my-nfs-pvc \
+  --set route.apiHost=querystudio-api.apps.your-cluster.example.com \
+  --set tls.enabled=true \
+  --set tls.secretName=querystudio-tls \
+  --namespace querystudio-prod --wait --timeout 5m</pre>
+      <div class="diff-label cmd">Step B — Production (3 API + Scheduler + Executor HPA + Redis)</div>
+<pre class="code cmd">helm upgrade --install qs-api k8s/helm/querystudio-api/ \
+  -f k8s/helm/querystudio-api/profiles/production/values.yaml \
+  --set image.tag=2.1.0 \
+  --set persistence.existingClaim=my-nfs-pvc \
+  --set route.apiHost=querystudio-api.apps.your-cluster.example.com \
+  --set tls.enabled=true \
+  --set tls.secretName=querystudio-tls \
+  --namespace querystudio-prod --wait --timeout 5m</pre>
+      <div class="diff-label yaml">Recommended: my-api-values.yaml (keeps infra overrides out of shell history)</div>
+<pre class="code yaml">image:
+  tag: "2.1.0"
+
+route:
+  apiHost: querystudio-api.apps.your-cluster.example.com   # ← SET
+
+tls:
+  enabled: true
+  secretName: querystudio-tls
+
+# NOTE: CORS, auth type, cache mode, queue backend live in
+#       k8s/helm/querystudio-api/config/production.json — edit that file
+#       directly. my-api-values.yaml is for infra overrides only.
+
+redis:
+  enabled: true
+
+persistence:
+  existingClaim: "my-nfs-pvc"</pre>
+<pre class="code cmd">helm upgrade --install qs-api k8s/helm/querystudio-api/ \
+  -f k8s/helm/querystudio-api/profiles/production/values.yaml \
+  -f my-api-values.yaml \
+  --namespace querystudio-prod --wait --timeout 5m</pre>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Step 3: Deploy UI chart (pass API URL)</span>
+      <span class="action action-run">RUN</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="reason"><strong>How apiUrl reaches the browser:</strong> Helm renders <code>.Values.apiUrl</code> into a ConfigMap whose <code>config.json</code> key contains <code>{"apiUrl": "…"}</code>. The Deployment subPath-mounts that ConfigMap at <code>/app/build/config.json</code> inside the UI pod. At page load, <code>main.tsx</code> calls <code>fetch('/config.json')</code>, populates <code>window.APP_CONFIG</code>, <strong>then</strong> dynamically imports <code>App</code> — so <code>core.ts</code> and <code>AuthContext.tsx</code> see the correct <code>apiUrl</code> at module-eval time. The deployment template also includes a <code>checksum/config</code> annotation so pods auto-roll when the ConfigMap changes. No sed, no env vars, no image rebuild per environment.</div>
+
+      <div class="diff-label cmd">Option A — --set flag (quickest)</div>
+<pre class="code cmd">helm upgrade --install qs-ui k8s/helm/querystudio-ui/ \
+  -f k8s/helm/querystudio-ui/profiles/production/values.yaml \
+  --set image.tag=2.1.0 \
+  --set route.host=querystudio-ui.apps.your-cluster.example.com \
+  --set apiUrl=https://querystudio-api.apps.your-cluster.example.com \
+  --namespace querystudio-prod --wait --timeout 3m</pre>
+
+      <div class="diff-label cmd">Option B — override file (recommended, keeps config in git)</div>
+<pre class="code yaml"># my-ui-values.yaml
+image:
+  tag: "2.1.0"
+
+apiUrl: "https://querystudio-api.apps.your-cluster.example.com"   # ← the API route hostname
+
+route:
+  host: querystudio-ui.apps.your-cluster.example.com              # ← the UI route hostname</pre>
+<pre class="code cmd">helm upgrade --install qs-ui k8s/helm/querystudio-ui/ \
+  -f k8s/helm/querystudio-ui/profiles/production/values.yaml \
+  -f my-ui-values.yaml \
+  --namespace querystudio-prod --wait --timeout 3m</pre>
+
+      <div class="diff-label cmd">Option C — patch ConfigMap directly (hotfix, no helm upgrade required)</div>
+<pre class="code cmd"># Find the ConfigMap name (release is "qs-ui", so the CM is "qs-ui-config")
+oc get configmap -n querystudio-prod | grep qs-ui
+
+# Patch the config.json key with the new apiUrl
+oc create configmap qs-ui-config \
+  --from-literal=config.json='{"apiUrl":"https://querystudio-api.apps.your-cluster.example.com"}' \
+  --dry-run=client -o yaml | oc apply -f - -n querystudio-prod
+
+# Restart UI pods so the new ConfigMap is re-projected into the subPath mount
+oc rollout restart deployment/qs-ui -n querystudio-prod
+
+# Verify the served file
+curl -sk https://querystudio-ui.apps.your-cluster.example.com/config.json
+# Expected: {"apiUrl":"https://querystudio-api.apps.your-cluster.example.com"}</pre>
+
+      <div class="diff-label cmd">Option D — local dev only (public/config.json or .env.local)</div>
+<pre class="code cmd"># Option D1 — edit public/config.json (git-ignored) — Vite serves it as /config.json
+echo '{"apiUrl":""}' > frontend/public/config.json   # empty = use Vite proxy
+
+# Option D2 — .env.local fallback (when /config.json returns 404, main.tsx falls back
+# to import.meta.env.VITE_API_URL)
+# frontend/.env.local  (git-ignored)
+VITE_API_URL=https://querystudio-api.apps.your-cluster.example.com
+
+cd frontend && npm run dev</pre>
+
+      <table class="info" style="margin-top:12px">
+        <tr><th>Option</th><th>How</th><th>Rebuild needed?</th><th>Best for</th></tr>
+        <tr><td>A — <code>--set</code></td><td>Helm flag at deploy time</td><td>No</td><td>CI/CD pipelines, one-liners</td></tr>
+        <tr><td>B — override file</td><td><code>-f my-ui-values.yaml</code></td><td>No</td><td>Production (config in git per env)</td></tr>
+        <tr><td>C — patch ConfigMap</td><td><code>oc apply</code> + rollout restart</td><td>No</td><td>Hotfix on live cluster without helm</td></tr>
+        <tr><td>D — dev-only file</td><td><code>public/config.json</code> or <code>.env.local</code></td><td>No</td><td>Local dev only</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Step 3: Verify pods + route</span>
+      <span class="action action-verify">VERIFY</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label cmd">Check deployment</div>
+<pre class="code cmd"># Watch pods come up
+oc get pods -n querystudio-prod -w
+
+# Check services
+oc get svc -n querystudio-prod
+
+# Check BOTH routes (UI=edge, API=passthrough)
+oc get route -n querystudio-prod
+
+# Test API route (passthrough HTTPS — uvicorn terminates TLS)
+API_ROUTE=$(oc get route querystudio-api -n querystudio-prod -o jsonpath='{.spec.host}')
+curl -sk https://$API_ROUTE/health/live
+
+# Test UI route (edge HTTPS — HAProxy terminates TLS → HTTP to pod)
+UI_ROUTE=$(oc get route querystudio-ui -n querystudio-prod -o jsonpath='{.spec.host}')
+curl -sk https://$UI_ROUTE/health-ui</pre>
+      <div class="diff-label output">Expected pod status</div>
+<pre class="code output">NAME                                        READY   STATUS    RESTARTS
+querystudio-api-xxx-abc                     1/1     Running   0
+querystudio-api-xxx-def                     1/1     Running   0
+querystudio-api-xxx-ghi                     1/1     Running   0
+querystudio-ui-xxx-jkl                      1/1     Running   0
+querystudio-ui-xxx-mno                      1/1     Running   0
+querystudio-scheduler-xxx-pqr               1/1     Running   0
+querystudio-executor-xxx-stu                1/1     Running   0
+querystudio-executor-xxx-vwx                1/1     Running   0
+querystudio-redis-xxx-yza                   1/1     Running   0</pre>
+    </div>
+  </div>
+</div>
+
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<div class="section-group" id="health-verify">
+  <h2><span class="step-num">11</span> Health Verification <span class="type-badge type-verify">Verify</span></h2>
+
+  <table class="info">
+    <tr><th>#</th><th>Check</th><th>Command</th><th>Expected</th></tr>
+    <tr><td>1</td><td>All pods Running</td><td><code>oc get pods -n querystudio-prod</code></td><td>8+ pods, all 1/1 Running</td></tr>
+    <tr><td>2</td><td>No restarts</td><td><code>oc get pods -o wide</code></td><td>RESTARTS = 0</td></tr>
+    <tr><td>3</td><td>Both Routes exist</td><td><code>oc get route -n querystudio-prod</code></td><td><code>querystudio-api</code> (passthrough) + <code>querystudio-ui</code> (edge)</td></tr>
+    <tr><td>4</td><td>API health</td><td><code>curl -sk https://API_ROUTE/health/live</code></td><td><code>{"status":"ok"}</code></td></tr>
+    <tr><td>5</td><td>UI health</td><td><code>curl -sk https://UI_ROUTE/health-ui</code></td><td>HTTP 200</td></tr>
+    <tr><td>6</td><td>/config.json served</td><td><code>curl -sk https://UI_ROUTE/config.json</code></td><td><code>{"apiUrl":"https://API_ROUTE"}</code></td></tr>
+    <tr><td>7</td><td>Frontend loads + API reachable</td><td>Browser → <code>https://UI_ROUTE/</code></td><td>React app renders, no CORS errors in console</td></tr>
+    <tr><td>8</td><td>Login works</td><td>Login with AD credentials</td><td>Redirect to dashboard</td></tr>
+    <tr><td>9</td><td>Execute query</td><td>Run a simple S3 query</td><td>Results returned in grid</td></tr>
+    <tr><td>10</td><td>Cache working</td><td>Re-run same query</td><td>Faster response, cache HIT logged</td></tr>
+    <tr><td>11</td><td>Cache layer stats</td><td><code>curl -sk https://API_ROUTE/api/admin/cache/layer-stats</code></td><td>JSON with schema/partition/br_results hit rates</td></tr>
+    <tr><td>12</td><td>Logs clean</td><td><code>oc logs deploy/querystudio-api --tail=50</code></td><td>No ERROR / traceback; WARN lines acceptable (CORS wildcard, startup warnings)</td></tr>
+    <tr><td>13</td><td>PVC space</td><td><code>oc exec POD -- df -h /app/data</code></td><td>Expected capacity, &lt;50% used</td></tr>
+  </table>
+</div>
+
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<div class="section-group" id="scaling">
+  <h2><span class="step-num">12</span> Scaling &amp; HPA <span class="type-badge type-ops">Scaling</span></h2>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Executor HPA (enabled by default)</span>
+      <span class="action action-config">AUTO</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <table class="info">
+        <tr><th>Setting</th><th>Value</th></tr>
+        <tr><td>Min replicas</td><td>2</td></tr>
+        <tr><td>Max replicas</td><td>10</td></tr>
+        <tr><td>Scale up trigger</td><td>CPU &gt; 70% or Memory &gt; 80%</td></tr>
+        <tr><td>Scale up speed</td><td>+2 pods/min, stabilize 60s</td></tr>
+        <tr><td>Scale down speed</td><td>-1 pod/2min, stabilize 300s</td></tr>
+      </table>
+      <div class="diff-label cmd">Monitor HPA</div>
+<pre class="code cmd">oc get hpa -n querystudio-prod
+oc describe hpa querystudio-executor -n querystudio-prod</pre>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Manual scaling</span>
+      <span class="action action-run">RUN</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label cmd">Scale commands</div>
+<pre class="code cmd"># Scale API pods for Published Views API load
+oc scale deployment querystudio-api --replicas=5 -n querystudio-prod
+
+# Scale executor (or let HPA manage)
+oc scale deployment querystudio-executor --replicas=5 -n querystudio-prod</pre>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Pod Disruption Budget</span>
+      <span class="action action-config">CONFIG</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label yaml">PDB for api + executor</div>
+<pre class="code yaml">apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: querystudio-api-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: querystudio
+      component: api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: querystudio-executor-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: querystudio
+      component: executor</pre>
+    </div>
+  </div>
+</div>
+
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<div class="section-group" id="monitoring">
+  <h2><span class="step-num">13</span> Monitoring <span class="type-badge type-ops">Ops</span></h2>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Log commands</span>
+      <span class="action action-run">RUN</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label cmd">Useful log filters</div>
+<pre class="code cmd"># Stream API logs
+oc logs -f deploy/querystudio-api -n querystudio-prod
+
+# Filter for cache invalidation events
+oc logs deploy/querystudio-api -n querystudio-prod | grep "cache-invalidate"
+
+# Filter for snapshot fingerprint events
+oc logs deploy/querystudio-api -n querystudio-prod | grep "snapshot-fp"
+
+# Filter for subprocess temp cleanup
+oc logs deploy/querystudio-scheduler | grep "subprocess-tmp-cleanup"
+
+# Resource usage
+oc adm top pods -n querystudio-prod</pre>
+    </div>
+  </div>
+
+  <h3>Alert Thresholds</h3>
+  <table class="info">
+    <tr><th>Metric</th><th>Location</th><th>Alert Threshold</th></tr>
+    <tr><td>Pod restarts</td><td><code>oc get pods</code></td><td>&gt;0 in last hour</td></tr>
+    <tr><td>PVC usage</td><td><code>df -h /app/data</code></td><td>&gt;80%</td></tr>
+    <tr><td>Executor CPU</td><td>HPA metrics</td><td>&gt;85% sustained</td></tr>
+    <tr><td>Health endpoint</td><td><code>/health/live</code></td><td>Non-200 for &gt;60s</td></tr>
+    <tr><td>DuckDB temp</td><td><code>/app/data/tmp/duckdb</code></td><td>&gt;30 GB</td></tr>
+    <tr><td>Error rate</td><td>Log grep <code>ERROR</code></td><td>&gt;10/minute</td></tr>
+    <tr><td>Stale cache sweep</td><td>Log: <code>__stale_cache_sweep__</code></td><td>No sweep for &gt;4h</td></tr>
+  </table>
+</div>
+
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<div class="section-group" id="rollback">
+  <h2><span class="step-num">14</span> Rollback Procedure <span class="type-badge type-critical">Rollback</span></h2>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Helm rollback</span>
+      <span class="action action-run">RUN</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label cmd">Commands</div>
+<pre class="code cmd"># List releases
+helm history querystudio -n querystudio-prod
+
+# Rollback to previous revision
+helm rollback querystudio 1 -n querystudio-prod --wait
+
+# Verify
+oc get pods -n querystudio-prod
+curl -sk https://$(oc get route querystudio-api -n querystudio-prod -o jsonpath='{.spec.host}')/health/live</pre>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Emergency: scale to zero</span>
+      <span class="action action-critical">EMERGENCY</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label cmd">Stop all traffic immediately</div>
+<pre class="code cmd">oc scale deployment querystudio-api --replicas=0 -n querystudio-prod
+oc scale deployment querystudio-ui --replicas=0 -n querystudio-prod
+oc scale deployment querystudio-executor --replicas=0 -n querystudio-prod
+oc scale deployment querystudio-scheduler --replicas=0 -n querystudio-prod</pre>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">SQLite database backup + restore</span>
+      <span class="action action-manual">MANUAL</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label cmd">Backup before upgrade</div>
+<pre class="code cmd">API_POD=$(oc get pods -l component=api -o jsonpath='{.items[0].metadata.name}')
+oc exec $API_POD -- cp /app/data/querystudio.db /app/data/querystudio.db.backup-$(date +%Y%m%d)</pre>
+      <div class="diff-label cmd">Restore</div>
+<pre class="code cmd">oc exec $API_POD -- cp /app/data/querystudio.db.backup-20260407 /app/data/querystudio.db
+oc rollout restart deployment/querystudio-api -n querystudio-prod</pre>
+    </div>
+  </div>
+</div>
+
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<div class="section-group" id="upgrade">
+  <h2><span class="step-num">15</span> Upgrade Procedure <span class="type-badge type-deploy">Upgrade</span></h2>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Standard upgrade flow</span>
+      <span class="action action-run">RUN</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label cmd">Step-by-step</div>
+<pre class="code cmd"># 1. Build and push new image
+docker build -t querystudio:2.2.0 .
+docker tag querystudio:2.2.0 $REGISTRY/querystudio-prod/querystudio:2.2.0
+docker push $REGISTRY/querystudio-prod/querystudio:2.2.0
+
+# 2. Backup SQLite DB
+WS_POD=$(oc get pods -l component=api -o jsonpath='{.items[0].metadata.name}')
+oc exec $WS_POD -- cp /app/data/querystudio.db /app/data/querystudio.db.pre-2.2.0
+
+# 3. Update my-values.yaml → image.tag: "2.2.0"
+
+# 4. Helm upgrade
+helm upgrade querystudio k8s/helm/ -f my-values.yaml \
+  --namespace querystudio-prod --wait --timeout 5m
+
+# 5. Run health check
+bash health-check.sh
+
+# 6. If problems → rollback
+helm rollback querystudio -n querystudio-prod --wait</pre>
+    </div>
+  </div>
+</div>
+
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<div class="section-group" id="troubleshooting">
+  <h2><span class="step-num">16</span> Troubleshooting <span class="type-badge type-fix">Debug</span></h2>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Pod stuck in Pending</span>
+      <span class="action action-critical">ISSUE</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label cmd">Diagnose</div>
+<pre class="code cmd">oc describe pod &lt;pod-name&gt; -n querystudio-prod
+# Look for: Insufficient cpu/memory, PVC not bound, image pull error</pre>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Pod Evicted (ephemeral-local-storage)</span>
+      <span class="action action-critical">ISSUE</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="warning"><strong>Root cause:</strong> DuckDB temp or download staging on ephemeral storage. Fix: ensure <code>DUCKDB_TEMP_DIR</code> and <code>QS_DOWNLOAD_TEMP_DIR</code> point to PVC path (Section 3).</div>
+      <div class="diff-label cmd">Verify env vars</div>
+<pre class="code cmd">oc exec &lt;executor-pod&gt; -- env | grep -E "DUCKDB_TEMP|QS_DOWNLOAD|TMPDIR"
+# Should show /app/data/tmp/* paths</pre>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">SQLite "database is locked"</span>
+      <span class="action action-critical">ISSUE</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="warning">Multiple pods writing to the same SQLite file. <strong>Fix:</strong> Use PostgreSQL for multi-replica deployments (<code>database.type=postgresql</code>) or reduce webserver replicas to 1.</div>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">PVC full</span>
+      <span class="action action-critical">ISSUE</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label cmd">Diagnose and clean</div>
+<pre class="code cmd">WS_POD=$(oc get pods -l component=api -o jsonpath='{.items[0].metadata.name}')
+oc exec $WS_POD -- df -h /app/data
+oc exec $WS_POD -- du -sh /app/data/*
+
+# Cleanup old downloads
+oc exec $WS_POD -- find /app/data/downloads -mtime +7 -delete
+
+# Cleanup orphaned temp
+oc exec $WS_POD -- rm -rf /app/data/tmp/duckdb/*
+oc exec $WS_POD -- rm -rf /app/data/tmp/downloads/*</pre>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Cannot reach S3 from pod</span>
+      <span class="action action-critical">ISSUE</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label cmd">Test connectivity</div>
+<pre class="code cmd"># Direct
+oc exec $WS_POD -- curl -v https://s3.amazonaws.com/ 2>&amp;1 | head -20
+
+# Through proxy
+oc exec $WS_POD -- curl -v --proxy http://proxy.company.com:3128 https://s3.amazonaws.com/</pre>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Route returns 503</span>
+      <span class="action action-critical">ISSUE</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="diff-label cmd">Diagnose</div>
+<pre class="code cmd"># Check API pods ready
+oc get pods -l component=api -n querystudio-prod
+
+# Check UI pods ready
+oc get pods -l component=ui -n querystudio-prod
+
+# Check endpoints
+oc get endpoints querystudio-api -n querystudio-prod
+oc get endpoints querystudio-ui -n querystudio-prod
+
+# Check BOTH routes (there are now 2)
+oc describe route querystudio-api -n querystudio-prod
+oc describe route querystudio-ui -n querystudio-prod</pre>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">CORS errors in browser (API requests blocked)</span>
+      <span class="action action-critical">ISSUE</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="warning"><strong>Root cause:</strong> <code>cors.allow_origins</code> in the API's config JSON does not include the exact UI hostname. Since UI and API are on separate origins, the browser enforces CORS on every API call.</div>
+      <div class="diff-label yaml">Fix — edit the JSON file inside the chart (NOT values.yaml, NOT --set)</div>
+<pre class="code yaml"># File: k8s/helm/querystudio-api/config/production.json
+{
+  "cors": {
+    "allow_origins": [
+      "https://querystudio-ui.apps.your-cluster.example.com"
+    ],
+    "allow_methods": ["*"],
+    "allow_headers": ["*"]
+  }
+}</pre>
+      <div class="diff-label cmd">Re-deploy after editing the JSON file</div>
+<pre class="code cmd">helm upgrade qs-api k8s/helm/querystudio-api/ \
+  -f k8s/helm/querystudio-api/profiles/production/values.yaml \
+  --namespace querystudio-prod --wait</pre>
+      <div class="diff-label cmd">Verify CORS header on API</div>
+<pre class="code cmd">curl -sk -I \
+  -H "Origin: https://querystudio-ui.apps.your-cluster.example.com" \
+  https://querystudio-api.apps.your-cluster.example.com/health/live
+# Expected: Access-Control-Allow-Origin: https://querystudio-ui.apps.your-cluster.example.com</pre>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">/config.json shows wrong or empty apiUrl</span>
+      <span class="action action-critical">ISSUE</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="warning">The UI is calling the wrong API endpoint (or falling back to same-origin). <code>window.APP_CONFIG.apiUrl</code> is empty or incorrect.</div>
+      <div class="diff-label cmd">Diagnose</div>
+<pre class="code cmd"># Check what /config.json actually contains in the browser
+curl -sk https://querystudio-ui.apps.your-cluster.example.com/config.json
+# Expected: {"apiUrl":"https://querystudio-api.apps.your-cluster.example.com"}
+
+# Inspect the ConfigMap itself (release name "qs-ui" -> CM "qs-ui-config")
+oc get configmap qs-ui-config -n querystudio-prod -o jsonpath='{.data.config\.json}'
+
+# Confirm the subPath volumeMount exists on the UI pod
+oc get deploy qs-ui -o yaml -n querystudio-prod | grep -A3 volumeMounts
+
+# Fix: update apiUrl in your values file (or --set) and redeploy
+helm upgrade qs-ui k8s/helm/querystudio-ui/ \
+  -f k8s/helm/querystudio-ui/profiles/production/values.yaml \
+  --set apiUrl=https://querystudio-api.apps.your-cluster.example.com \
+  --namespace querystudio-prod</pre>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">/config.json returns HTML (index.html body) or 404</span>
+      <span class="action action-critical">ISSUE</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="warning"><strong>Root cause:</strong> The ConfigMap isn't mounted, or the subPath target doesn't match the server's doc root. With <code>serve -s build</code>, any unknown path falls through to <code>/index.html</code> (HTTP 200), so <code>main.tsx</code> parses HTML as JSON and logs a warning before falling back to empty <code>apiUrl</code>.</div>
+      <div class="diff-label cmd">Diagnose</div>
+<pre class="code cmd"># If the response starts with <!DOCTYPE html> the mount isn't taking effect
+curl -sk https://querystudio-ui.apps.your-cluster.example.com/config.json | head -5
+
+# Expected:  {"apiUrl":"https://..."}
+# Broken:    &lt;!DOCTYPE html&gt;&lt;html lang="en"&gt;... (serve fallback)
+
+# Inspect the pod — confirm the file is projected at /app/build/config.json
+oc exec -n querystudio-prod deploy/qs-ui -- cat /app/build/config.json
+
+# Inspect the volume + volumeMount wiring
+oc get deploy qs-ui -n querystudio-prod -o yaml | grep -A10 'runtime-config'</pre>
+      <div class="diff-label after">Fix</div>
+      <div class="reason">The <code>querystudio-ui</code> Deployment subPath-mounts <code>qs-ui-config</code> (key <code>config.json</code>) at <code>/app/build/config.json</code>. If the mount is missing, the Helm template rendered with an older chart version. Re-render and upgrade:</div>
+<pre class="code cmd"># Dry-run to confirm the chart produces both resources
+helm template qs-ui k8s/helm/querystudio-ui/ \
+  -f k8s/helm/querystudio-ui/profiles/production/values.yaml | grep -E '(ConfigMap|subPath|runtime-config)'
+
+# Re-apply (pods auto-roll via checksum/config annotation)
+helm upgrade qs-ui k8s/helm/querystudio-ui/ \
+  -f k8s/helm/querystudio-ui/profiles/production/values.yaml \
+  --namespace querystudio-prod --wait</pre>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">WebSocket fails to connect (split-host deployment)</span>
+      <span class="action action-critical">ISSUE</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="warning"><strong>Root cause:</strong> WebSocket was connecting to the UI hostname instead of the API hostname. Since <code>/ws</code> endpoint runs on the API pods, the connection must target <code>querystudio-api</code>, not <code>querystudio-ui</code>.</div>
+      <div class="diff-label cmd">Diagnose</div>
+<pre class="code cmd"># Open browser DevTools → Network → WS tab
+# If you see WebSocket connecting to querystudio-ui.apps.*/ws/* → that's wrong
+# It should connect to querystudio-api.apps.*/ws/*
+
+# Check that the API Route has WebSocket annotations
+oc get route querystudio-api -o yaml | grep -A2 haproxy
+# Expected:
+#   haproxy.router.openshift.io/timeout: 30m
+#   haproxy.router.openshift.io/websocket: "true"</pre>
+      <div class="diff-label after">Fix</div>
+      <div class="reason">Ensure the UI's <code>/config.json</code> has the correct <code>apiUrl</code>. <code>WebSocketContext.tsx</code> derives the WebSocket URL from <code>API_BASE_URL</code> (populated from <code>window.APP_CONFIG.apiUrl</code>): <code>https://api-host</code> → <code>wss://api-host/ws/{clientId}</code>. If <code>apiUrl</code> is empty, it falls back to <code>window.location.host</code> (UI pod — wrong).</div>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">Login / auth calls fail (401 or network error)</span>
+      <span class="action action-critical">ISSUE</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="warning"><strong>Root cause:</strong> Auth endpoints (<code>/auth/config</code>, <code>/auth/login</code>, <code>/auth/me</code>, <code>/auth/logout</code>) are on the API pod. If <code>/config.json</code> is not served correctly (empty <code>apiUrl</code>), these calls go to the UI serve (which has no backend routes — SPA only).</div>
+      <div class="diff-label cmd">Diagnose</div>
+<pre class="code cmd"># Test auth config endpoint directly on API
+curl -sk https://querystudio-api.apps.your-cluster.example.com/auth/config
+# Expected: {"type": "ad", ...} or {"type": "local", ...}
+
+# Verify the UI is serving the correct apiUrl
+curl -sk https://querystudio-ui.apps.your-cluster.example.com/config.json
+# Expected: {"apiUrl":"https://querystudio-api.apps.your-cluster.example.com"}</pre>
+      <div class="diff-label after">Fix</div>
+      <div class="reason">All auth calls in <code>AuthContext.tsx</code> prefix with <code>window.APP_CONFIG.apiUrl</code> (it can't import <code>API_BASE_URL</code> from <code>core.ts</code> — circular dep). If auth is broken, re-verify the ConfigMap is mounted and the pods picked up the latest revision (<code>checksum/config</code> annotation auto-rolls pods when <code>apiUrl</code> changes).</div>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">AD login fails: "Bind failed — Authentication error" on OpenShift/FIPS</span>
+      <span class="action action-critical">ISSUE</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="warning"><strong>Root cause:</strong> NTLM bind calls <code>hashlib.new('md4', ...)</code>. OpenSSL on OpenShift/FIPS rejects MD4 → bind crashes with a generic "Authentication error" (works fine locally where MD4 is allowed).</div>
+      <div class="diff-label cmd">Diagnose — check the AD bind decision log</div>
+<pre class="code cmd">oc logs deploy/querystudio-api -n querystudio-prod | grep "AD bind decision"
+# Expected for LDAPS:
+#   AD bind decision: ... normalized_url='ldaps://...' → use_ssl=True → auth_method=SIMPLE
+# Bad (falls through to NTLM → MD4 → FIPS crash):
+#   AD bind decision: ... use_ssl=False → auth_method=NTLM</pre>
+      <div class="diff-label after">Fix</div>
+      <div class="reason">
+        1. <strong>Case-sensitivity:</strong> commit <code>db66d72</code> normalises the URL with
+        <code>.strip().lower()</code> so <code>LDAPS://</code> / <code> ldaps://</code> / trailing whitespace
+        all route to SIMPLE bind.<br>
+        2. <strong>Config:</strong> set <code>"ad_server": "ldaps://dc.company.com"</code> and
+        <code>"ad_use_ssl": true</code> in <code>config.json</code>.<br>
+        3. <strong>Force rollout:</strong> <code>oc rollout restart deploy/querystudio-api -n &lt;ns&gt;</code>.
+      </div>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">AD login fails: "LDAPSocketOpenError — socket ssl error: certificate" (unknown CA)</span>
+      <span class="action action-critical">ISSUE</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="warning"><strong>Root cause:</strong> LDAPS bind reached the AD server, but the pod's default trust store doesn't know the corporate CA that signed the AD server cert → <code>unable to get local issuer certificate</code>.</div>
+      <div class="diff-label cmd">Option A — Quick unblock (dev / testing only)</div>
+<pre class="code cmd"># Disable cert validation for LDAPS — do NOT use in production
+oc edit configmap qs-api-config -n querystudio-prod
+# In the embedded config.json, under "auth":
+#   "ad_tls_validate": false
+oc rollout restart deploy/querystudio-api -n querystudio-prod</pre>
+      <div class="diff-label cmd">Option B — Production fix (mount the corporate CA)</div>
+<pre class="code cmd"># 1. Export the AD CA (or get it from your PKI team)
+openssl s_client -showcerts -connect dc.company.com:636 &lt;/dev/null 2&gt;/dev/null \
+  | sed -ne '/-BEGIN CERT-/,/-END CERT-/p' &gt; ad-ca.crt
+
+# 2. Create a Secret
+oc create secret generic ad-ca \
+  --from-file=ca.crt=./ad-ca.crt \
+  -n querystudio-prod
+
+# 3. Enable the mount in Helm
+helm upgrade qs-api k8s/helm/querystudio-api/ \
+  -f k8s/helm/querystudio-api/profiles/production/values.yaml \
+  --set auth.adCa.enabled=true \
+  --namespace querystudio-prod
+
+# 4. Verify the mount
+oc exec deploy/querystudio-api -- ls -la /app/certs/ad-ca/
+# Expected: ca.crt
+
+# 5. Verify the env var
+oc exec deploy/querystudio-api -- env | grep QUERYSTUDIO_AUTH_AD_TLS_CA_FILE
+# Expected: QUERYSTUDIO_AUTH_AD_TLS_CA_FILE=/app/certs/ad-ca/ca.crt
+
+# 6. Verify the bind log line
+oc logs deploy/querystudio-api | grep "AD TLS: using custom CA bundle"</pre>
+      <div class="reason">
+        Backend (<code>core/ad_auth.py::_make_ldap_server()</code>) reads
+        <code>ad_tls_ca_file</code> from config and passes it to a custom SSLContext.
+        Mount is applied to all 4 pods (api, scheduler, executor,
+        published-api) because <code>lookup_ad_user()</code> is also called from background jobs for group
+        resolution.
+      </div>
+    </div>
+  </div>
+
+  <div class="step-item">
+    <div class="header">
+      <span class="file">AD login fails: "socket ssl wrapping error: certificate" (hostname mismatch)</span>
+      <span class="action action-critical">ISSUE</span>
+      <span class="arrow">▶</span>
+    </div>
+    <div class="detail">
+      <div class="warning"><strong>Root cause:</strong> CA is correctly loaded, but the AD cert CN/SAN (e.g. <code>dc01.INTRANET.corp.COM</code>) doesn't match the hostname in <code>ad_server</code> (e.g. <code>intranet.corp.com</code>). Python auto-enables <code>check_hostname=True</code> when <code>verify_mode=CERT_REQUIRED</code>, rejecting the cert. May also cause a 22-second hang before failing.</div>
+      <div class="diff-label cmd">Fix — disable hostname checking (default since commit dc6eb6c)</div>
+<pre class="code cmd"># In config.json → auth section — this is already the DEFAULT (false):
+"ad_tls_check_hostname": false
+
+# Verify in logs:
+oc logs deploy/querystudio-api | grep "AD TLS:"
+# Expected: AD TLS: validate=True  check_hostname=False  ca_file=/app/certs/ad-ca/ca.crt
+
+# If you've upgraded to dc6eb6c or later, this is automatic.
+# Only set ad_tls_check_hostname=true if your AD cert has SANs matching ad_server.</pre>
+      <div class="reason">
+        AD certs are almost always issued to a specific DC FQDN (e.g. <code>dc01.intranet.corp.com</code>)
+        rather than the domain name used in <code>ad_server</code> (e.g. <code>intranet.corp.com</code>).
+        The <code>ad_tls_check_hostname</code> config (default <code>false</code>) disables hostname verification
+        while keeping cert chain validation (<code>CERT_REQUIRED</code>). The fix also applies
+        <code>connect_timeout</code> to the SSL handshake itself, preventing 22-second hangs on cert errors.
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<div class="section-group" id="pvc-sizing">
+  <h2><span class="step-num">17</span> PVC Sizing Guide <span class="type-badge type-infra">Reference</span></h2>
+
+  <h3>Small Team (&lt;10 users, &lt;50 S3 tables)</h3>
+  <table class="info">
+    <tr><th>Component</th><th>Size</th></tr>
+    <tr><td>Query cache</td><td>2 GB</td></tr>
+    <tr><td>Downloads</td><td>5 GB</td></tr>
+    <tr><td>DuckDB temp</td><td>10 GB</td></tr>
+    <tr><td>Download staging</td><td>5 GB</td></tr>
+    <tr><td>Other</td><td>5 GB</td></tr>
+    <tr><td><strong>Recommended PVC</strong></td><td><strong>50 GB</strong></td></tr>
+  </table>
+
+  <h3>Medium Team (20-50 users, &lt;200 tables)</h3>
+  <table class="info">
+    <tr><th>Component</th><th>Size</th></tr>
+    <tr><td>Query cache</td><td>10 GB</td></tr>
+    <tr><td>Downloads</td><td>20 GB</td></tr>
+    <tr><td>DuckDB temp</td><td>20 GB</td></tr>
+    <tr><td>Materialized views</td><td>10 GB</td></tr>
+    <tr><td>Published cache</td><td>10 GB</td></tr>
+    <tr><td>Other</td><td>15 GB</td></tr>
+    <tr><td><strong>Recommended PVC</strong></td><td><strong>150 GB</strong></td></tr>
+  </table>
+
+  <h3>Large Deployment (50-200 users, 500+ tables, Published API)</h3>
+  <table class="info">
+    <tr><th>Component</th><th>Size</th></tr>
+    <tr><td>Query cache</td><td>30 GB</td></tr>
+    <tr><td>Downloads</td><td>50 GB</td></tr>
+    <tr><td>DuckDB temp</td><td>40 GB</td></tr>
+    <tr><td>Materialized views</td><td>20 GB</td></tr>
+    <tr><td>Published cache</td><td>20 GB</td></tr>
+    <tr><td>Local tables</td><td>50 GB</td></tr>
+    <tr><td>Feeds</td><td>10 GB</td></tr>
+    <tr><td>Other</td><td>30 GB</td></tr>
+    <tr><td><strong>Recommended PVC</strong></td><td><strong>300-500 GB</strong></td></tr>
+  </table>
+</div>
+
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<div class="section-group" id="env-vars">
+  <h2>Environment Variables Reference <span class="type-badge type-config">Reference</span></h2>
+
+  <h3>Executor-Specific</h3>
+  <table class="info">
+    <tr><th>Variable</th><th>Default</th><th>Purpose</th></tr>
+    <tr><td><code>DUCKDB_MEMORY_LIMIT</code></td><td>6GB</td><td>DuckDB memory cap (leave headroom for Python)</td></tr>
+    <tr><td><code>DUCKDB_THREADS</code></td><td>4</td><td>DuckDB thread count (match CPU limit)</td></tr>
+    <tr><td><code>DUCKDB_TEMP_DIR</code></td><td><em>none</em></td><td>DuckDB spill directory (must be on PVC)</td></tr>
+    <tr><td><code>QS_DOWNLOAD_TEMP_DIR</code></td><td><em>none</em></td><td>Presigned URL download staging (must be on PVC)</td></tr>
+    <tr><td><code>TMPDIR</code></td><td>/tmp</td><td>General temp directory</td></tr>
+  </table>
+
+  <h3>All Components</h3>
+  <table class="info">
+    <tr><th>Variable</th><th>Default</th><th>Purpose</th></tr>
+    <tr><td><code>QUERYSTUDIO_SERVER_HOST</code></td><td>0.0.0.0</td><td>Bind address</td></tr>
+    <tr><td><code>QUERYSTUDIO_SERVER_PORT</code></td><td>8000</td><td>HTTP port</td></tr>
+    <tr><td><code>QUERYSTUDIO_AUTH_TYPE</code></td><td>none</td><td>Auth: none, ad, local</td></tr>
+    <tr><td><code>QUERYSTUDIO_DATABASE_TYPE</code></td><td>sqlite</td><td>Metadata backend: sqlite, postgresql</td></tr>
+    <tr><td><code>QUERYSTUDIO_ENCRYPTION_KEY</code></td><td><em>required</em></td><td>Fernet key for credential encryption</td></tr>
+    <tr><td><code>QUERYSTUDIO_SCHEDULER_MODE</code></td><td>embedded</td><td>embedded or external</td></tr>
+    <tr><td><code>QUERYSTUDIO_EXECUTOR_MODE</code></td><td>embedded</td><td>embedded or external</td></tr>
+    <tr><td><code>QUERYSTUDIO_QUEUE_BACKEND</code></td><td>memory</td><td>memory or redis</td></tr>
+    <tr><td><code>QUERYSTUDIO_CACHE_ENABLED</code></td><td>true</td><td>Enable query cache</td></tr>
+    <tr><td><code>QUERYSTUDIO_CACHE_TTL_SECONDS</code></td><td>3600</td><td>Cache entry lifetime</td></tr>
+    <tr><td><code>QUERYSTUDIO_REPLICAS</code></td><td>1</td><td>Pod replica count — triggers multi-pod warnings in startup validation when &gt;1</td></tr>
+    <tr><td><code>QUERYSTUDIO_CACHE_COHERENCE_MODE</code></td><td>local</td><td><code>local</code> = process-only (single pod), <code>redis_broadcast</code> = Redis pub/sub invalidation (multi-pod)</td></tr>
+  </table>
+</div>
+
+
+<!-- ─────────────────────────────────────────────────────────────────── -->
+<div class="section-group" id="versions">
+  <h2>Version Matrix <span class="type-badge type-config">Reference</span></h2>
+
+  <table class="info">
+    <tr><th>Component</th><th>Version</th></tr>
+    <tr><td>QueryStudio</td><td>2.1.0</td></tr>
+    <tr><td>sqlglot</td><td>&gt;=25.0.0,&lt;31.0.0 &mdash; the cap is load-bearing, see the 2026-08-19 release notes</td></tr>
+    <tr><td>Python</td><td>3.11</td></tr>
+    <tr><td>Node.js (build only)</td><td>20-alpine</td></tr>
+    <tr><td>DuckDB</td><td>Latest via pip</td></tr>
+    <tr><td>Redis</td><td>7-alpine</td></tr>
+    <tr><td>Helm Chart</td><td>1.0.0</td></tr>
+    <tr><td>OpenShift</td><td>4.x (tested 4.14+)</td></tr>
+    <tr><td>Base Image</td><td>python:3.11-slim</td></tr>
+    <tr><td>Backend Tests</td><td>16,301 passing / 85 skipped / 0 failing (2026-08-19, full suite 17m00s)</td></tr>
+    <tr><td>ETL Tests</td><td>3,247 passing / 7 skipped / 0 failing</td></tr>
+    <tr><td>Frontend Tests (Vitest)</td><td>17 passing</td></tr>
+  </table>
+
+  <h3>Phase 115 — Production Hardening</h3>
+  <table class="info">
+    <tr><th>Feature</th><th>Description</th></tr>
+    <tr><td>DuckDB S3 Credential Quoting</td><td><code>_esc()</code> single-quote escaping on all S3 SET statements across 7 files; prevents SQL injection via credentials with special chars</td></tr>
+    <tr><td>CORS + Multi-Pod Startup Warnings</td><td><code>validate_config()</code> warns: CORS <code>["*"]</code> with auth enabled; SQLite + replicas &gt; 1; non-Redis queue + replicas &gt; 1</td></tr>
+    <tr><td>Role Check Centralization</td><td>23 inline <code>user.get("is_admin")</code> checks replaced with <code>is_admin_like(user)</code> across 9 files</td></tr>
+    <tr><td>SystemAccount Password Masking</td><td><code>to_dict()</code> returns <code>"password": "***"</code> by default; internal callers use <code>to_dict(include_password=True)</code></td></tr>
+  </table>
+
+  <h3>Phase 116 — Frontend God Component Split</h3>
+  <table class="info">
+    <tr><th>Feature</th><th>Description</th></tr>
+    <tr><td>AdminPage Split</td><td>13 inline render functions extracted to <code>components/admin/</code>; AdminPage 3,950 → 2,055 lines (48% reduction); each section self-polls, no double-polling</td></tr>
+    <tr><td>Query Builder Hooks</td><td><code>useQueryBuilderState</code> (27 state vars), <code>useQueryExecution</code> (timer + progress), <code>useSidebarState</code> (connections + files)</td></tr>
+    <tr><td>Vitest Setup</td><td>Vitest + React Testing Library; <code>renderWithProviders()</code> utility; 17 component tests passing</td></tr>
+  </table>
+
+  <h3>Phase 117 — TypeScript + Accessibility</h3>
+  <table class="info">
+    <tr><th>Feature</th><th>Description</th></tr>
+    <tr><td>Shared Type Definitions</td><td><code>types/api.ts</code> (15 interfaces) + <code>types/reports.ts</code> (6 interfaces); replaces <code>any</code> in top-offender components</td></tr>
+    <tr><td>@ts-nocheck Removed</td><td>Removed from 10 files; type errors fixed; <code>npm run type-check</code> passes clean</td></tr>
+    <tr><td>Baseline ARIA Accessibility</td><td><code>aria-label</code>, <code>aria-sort</code>, <code>aria-live</code>, <code>role="navigation"</code>, <code>aria-current="page"</code> added to LoginPage, Layout, DataGridViewer, CompleteQueryBuilder</td></tr>
+  </table>
+
+  <h3>Phase 118 — Multi-Pod Cache Coherence</h3>
+  <table class="info">
+    <tr><th>Feature</th><th>Description</th></tr>
+    <tr><td>Cache Abstraction Layer</td><td><code>core/cache_layer.py</code>: <code>LocalCache</code> (TTL, LRU, stats) + <code>RedisBroadcastCache</code> (Redis pub/sub invalidation); <code>create_cache()</code> factory</td></tr>
+    <tr><td>3 Caches Migrated</td><td>Schema cache (TTL=600s, max=200), partition cache (TTL=300s), BR results cache (TTL=3600s, max=50) use the abstraction layer</td></tr>
+    <tr><td>Cache Stats Endpoint</td><td><code>GET /api/admin/cache/layer-stats</code> returns per-cache hit rates, sizes, eviction counts</td></tr>
+    <tr><td>Multi-Pod Docs + Helm</td><td><code>DEPLOYMENT.md</code> multi-pod section; <code>cache.coherence_mode: redis_broadcast</code> in production profile; Redis enabled by default</td></tr>
+  </table>
+
+  <h3>Phase 115–118 Routing + Infrastructure Fixes</h3>
+  <table class="info">
+    <tr><th>Fix</th><th>Description</th></tr>
+    <tr><td>Mixed TLS Routing</td><td>Separate hostnames: UI=edge termination (HAProxy→HTTP pod), API=passthrough (uvicorn→HTTPS). Replaces broken path-based single-hostname approach.</td></tr>
+    <tr><td>Runtime /config.json</td><td><code>window.APP_CONFIG.apiUrl</code> populated at page load by <code>main.tsx</code> from ConfigMap-mounted <code>/app/build/config.json</code>. <code>checksum/config</code> annotation auto-rolls pods on change. UI image never needs rebuild when API hostname changes.</td></tr>
+    <tr><td>CORS Wildcard Fix</td><td><code>allow_credentials=True</code> auto-disabled when <code>allow_origins=["*"]</code> (violates CORS spec). Production sets exact UI origin.</td></tr>
+    <tr><td>AdminPage Double-Poll Fixed</td><td>POLL_CONFIG cleared; extracted monitoring components (ActiveQueries, SystemHealth, WorkerPool, UserActivity, Scheduler) self-poll at their own intervals. No 2× API calls.</td></tr>
+  </table>
+
+  <h3 id="split-host-fixes">Split-Host Deployment Fixes (post-118)</h3>
+  <p class="summary">Fixes for UI→API communication when UI and API are on separate hostnames (split Helm charts). Required after moving from single-origin Docker Compose to split-host OpenShift deployment.</p>
+  <table class="info">
+    <tr><th>Fix</th><th>File(s)</th><th>Description</th></tr>
+    <tr>
+      <td>WebSocket URL</td>
+      <td><code>WebSocketContext.tsx</code></td>
+      <td>WebSocket was connecting to <code>window.location.host</code> (UI pod). Fixed to derive WS URL from <code>API_BASE_URL</code>: <code>https://api-host</code> → <code>wss://api-host/ws/{clientId}</code></td>
+    </tr>
+    <tr>
+      <td>4 Raw fetch() Calls</td>
+      <td><code>AdminPage.tsx</code>, <code>ConnectionManager.tsx</code>, <code>columnPatterns.ts</code></td>
+      <td>Fetch calls using relative paths (<code>/api/admin/ui-visibility</code>, <code>/auth/config</code>, <code>/api/suggest/chatbot-patterns</code>) resolved against the UI pod instead of API. Fixed to prefix with <code>API_BASE_URL</code>.</td>
+    </tr>
+    <tr>
+      <td>AuthContext Auth Calls</td>
+      <td><code>AuthContext.tsx</code></td>
+      <td><code>/auth/config</code>, <code>/auth/login</code>, <code>/auth/me</code>, <code>/auth/logout</code> used relative paths. Cannot import from <code>core.ts</code> (circular dep). Fixed to read <code>window.APP_CONFIG.apiUrl</code> directly (populated by <code>main.tsx</code> bootstrap from <code>/config.json</code>).</td>
+    </tr>
+    <tr>
+      <td>Display URL Double-Origin</td>
+      <td><code>ApiExplorerPage.tsx</code>, <code>PublishedViewsPage.tsx</code>, <code>PublishViewDialog.tsx</code></td>
+      <td><code>${window.location.origin}${API_BASE_URL}</code> produced <code>https://ui-host/https://api-host/...</code>. Fixed to <code>${API_BASE_URL || window.location.origin}</code>.</td>
+    </tr>
+    <tr>
+      <td>UI runtime apiUrl → ConfigMap</td>
+      <td><code>k8s/helm/querystudio-ui/templates/configmap.yaml</code>, <code>deployment.yaml</code>, <code>frontend/src/main.tsx</code>, <code>Dockerfile.ui</code></td>
+      <td>Replaced the nginx + <code>env-config.js</code> + CMD-sed placeholder scheme with a clean <code>/config.json</code> ConfigMap subPath-mount. <code>main.tsx</code> fetches <code>/config.json</code> before importing <code>App</code> so <code>core.ts</code> / <code>AuthContext.tsx</code> see <code>window.APP_CONFIG.apiUrl</code> at module-eval time. No sed, no env vars, no nginx — one source of truth per environment.</td>
+    </tr>
+    <tr>
+      <td>Partition Pruning Banner</td>
+      <td><code>DataGridViewer.tsx</code></td>
+      <td>File stats banner disappeared: <code>execution_progress</code> mounts DataGridViewer before <code>execution_completed</code> delivers <code>file_stats</code>. <code>useState</code> initializer only runs once. Fixed with <code>useEffect</code> to sync prop→state.</td>
+    </tr>
+  </table>
+</div>
+
+
+</div><!-- /sections -->
+</div><!-- /main -->
+
+<!-- ═══════════════════════ SCRIPTS ═══════════════════════ -->
+<script>
+// Expand/collapse step items
+document.querySelectorAll('.step-item .header').forEach(h => {
+  h.addEventListener('click', () => h.parentElement.classList.toggle('open'));
+});
+
+// Search/filter
+function filterSections() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  document.querySelectorAll('.section-group').forEach(g => {
+    const text = g.textContent.toLowerCase();
+    g.style.display = text.includes(q) ? '' : 'none';
+  });
+}
+
+// Sidebar active state
+document.querySelectorAll('.sidebar a').forEach(a => {
+  a.addEventListener('click', () => {
+    document.querySelectorAll('.sidebar a').forEach(x => x.classList.remove('active'));
+    a.classList.add('active');
+  });
+});
+
+// Hash auto-scroll
+if (location.hash) {
+  const el = document.querySelector(location.hash);
+  if (el) setTimeout(() => el.scrollIntoView({ behavior: 'smooth' }), 100);
+}
+</script>
+
+</body>
+</html>
