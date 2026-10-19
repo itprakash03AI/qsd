@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spark Image Jetty CVEs</title>
+<style>
+  body { font-family: "Segoe UI", system-ui, sans-serif; line-height: 1.55; max-width: 1000px;
+         margin: 2rem auto; padding: 0 1rem; color: #1d1d1f; background: #fff; }
+  h1 { font-size: 1.7rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.2rem; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #ddd; padding: .4rem .55rem; text-align: left; vertical-align: top; font-size: .93rem; }
+  th { background: #f6f6f6; }
+  code, pre { background: #f4f4f4; border-radius: 3px; font-size: .9em; }
+  code { padding: .1rem .3rem; }
+  pre { padding: .6rem .8rem; overflow-x: auto; }
+  .ok { color: #0a6b2d; font-weight: 700; }
+  .bad { color: #a4161a; font-weight: 700; }
+  .warn { color: #8a5a00; font-weight: 700; }
+  .quiet { color: #666; font-size: .92rem; }
+  li { margin: .25rem 0; }
+  @media (max-width: 640px) { table { display: block; overflow-x: auto; } }
+</style>
+</head>
+<body>
+<h1>Building a Spark image that passes the Jetty scan</h1>
+<p class="quiet">2026-10-18 · for whoever builds QueryStudio's Spark job image.
+CVE-2026-2332 (<code>jetty-io</code> / <code>jetty-http</code>) and CVE-2026-10050 (<code>jetty-security</code>) are both rated critical, and they block the image scan.
+Every version below was measured by scanning the jars inside the real images on 2026-10-18 (§7). Nothing here is taken from release notes alone.</p>
+
+<h2>1 · The answer in short</h2>
+<ul>
+  <li><b>Spark must be 4.2.x.</b> It is the only Spark line on Jetty 12. Jetty 9.4, 10 and 11 are end-of-life, and CVE-2026-10050 will not be fixed on them.</li>
+  <li><b>Even Spark 4.2.0 is not enough as shipped.</b> It carries Jetty 12.1.8, but CVE-2026-10050 needs 12.1.10 or later. Build Spark 4.2.0 with a newer Jetty (§4); 12.1.14 is the latest release.</li>
+  <li><b>Hadoop's built-in Jetty 9.4 must be removed</b> (§5). Every released Hadoop, 3.5.0 included, still bundles Jetty 9.4, so no Hadoop version clears it.</li>
+  <li><b>Iceberg is the open risk</b> (§6). QueryStudio's Spark pods read Iceberg tables, and no Iceberg build exists for Spark 4.2 yet. The 4.1 build has to be proven on 4.2 before the image ships.</li>
+</ul>
+
+<h2>2 · The two CVEs</h2>
+<table>
+<tr><th>CVE</th><th>What</th><th>Jetty versions that fix it</th></tr>
+<tr><td>CVE-2026-2332</td><td>HTTP request smuggling via chunked-extension parsing (<code>jetty-http</code>, reported against <code>jetty-io</code>)</td><td>12.1.7+, 12.0.33+. On 9.4/10/11: only paid end-of-life support (9.4.60, 10.0.28, 11.0.28+).</td></tr>
+<tr><td>CVE-2026-10050</td><td>Digest authentication bypass via an ISO-8859-1 encoding collision (<code>jetty-security</code>)</td><td><b>12.1.10+</b>, 12.0.36+. 9.4, 10 and 11 get no open-source fix.</td></tr>
+</table>
+<p><b>The rule: every Jetty copy in the image must be 12.1.10 or later, or gone.</b></p>
+
+<h2>3 · Where Jetty is: inside two jars, never on its own</h2>
+<p>No <code>jetty-*.jar</code> sits in <code>/opt/spark/jars</code>. Jetty is shaded (copied and renamed) inside two jars, and scanners find it through the Maven <code>pom.properties</code> files those jars carry.</p>
+<table>
+<tr><th>Image (measured)</th><th><code>spark-core</code> carries (as <code>org.sparkproject.jetty</code>)</th><th><code>hadoop-client-runtime</code> carries (as <code>org.apache.hadoop.shaded.org.eclipse.jetty</code>)</th><th>Passes?</th></tr>
+<tr><td>QueryStudio today: <code>apache/spark:3.5.3</code>, Hadoop 3.3.4</td><td>9.4.54</td><td>9.4.43</td><td class="bad">no, both CVEs</td></tr>
+<tr><td><code>apache/spark:3.5.5</code>, Hadoop 3.3.4</td><td>9.4.56</td><td>9.4.43</td><td class="bad">no</td></tr>
+<tr><td><code>apache/spark:4.1.3</code>, Hadoop 3.4.2</td><td>11.0.26</td><td>9.4.57</td><td class="bad">no: Jetty 11 gets no fix</td></tr>
+<tr><td><code>apache/spark:4.2.0</code>, Hadoop 3.5.0</td><td>12.1.8</td><td>9.4.58</td><td class="bad">no: 12.1.8 &lt; 12.1.10, and Hadoop's 9.4</td></tr>
+<tr><td><b>Spark 4.2.0 rebuilt with Jetty 12.1.14, Hadoop's Jetty removed</b></td><td>12.1.14</td><td>none</td><td class="ok">yes, expected; prove it with §7</td></tr>
+</table>
+<p class="quiet">PySpark 4.1.2 runs Spark 4.1 on Jetty 11, so it cannot pass however it is built.</p>
+
+<h2>4 · Spark's Jetty: build Spark 4.2.0 from source with Jetty 12.1.14</h2>
+<p>Spark's build takes the Jetty version as a property. 12.1.8 → 12.1.14 is a patch upgrade on the same line, so the Spark code is unchanged.</p>
+<pre>git clone --branch v4.2.0 --depth 1 https://github.com/apache/spark.git
+cd spark
+./dev/make-distribution.sh --name qs --tgz --pip \
+    -Pkubernetes -Phadoop-cloud -Djetty.version=12.1.14
+# -> spark-4.2.0-bin-qs.tgz ; build the image from it, e.g. with
+#    bin/docker-image-tool.sh -r &lt;your-registry&gt; -t 4.2.0-qs -p kubernetes/dockerfiles/spark/bindings/python/Dockerfile build</pre>
+<p>Use Java 21; the official 4.2.0 image runs OpenJDK 21. Python in the official 4.2.0 Ubuntu image is 3.10.</p>
+
+<h2>5 · Hadoop's Jetty 9.4: remove it</h2>
+<p>QueryStudio's job uses Hadoop only as an <b>S3 client</b> (s3a, for the artifact store and S3 reads and writes). The Jetty inside <code>hadoop-client-runtime</code> serves Hadoop's own web servers (NameNode UI, KMS, WebHDFS), which a client never starts. There are two ways to remove it.</p>
+<p><b>A. Delete the shaded Jetty from the jar at image build</b> (smallest change):</p>
+<pre>cd /opt/spark/jars
+zip -d hadoop-client-runtime-*.jar \
+    'org/apache/hadoop/shaded/org/eclipse/jetty/*' \
+    'META-INF/maven/org.eclipse.jetty*'
+# run §7 afterwards: it must list no Jetty in hadoop-client-runtime</pre>
+<p><b>B. Build Spark with <code>-Phadoop-provided</code></b>, then add the plain Hadoop jars yourself (<code>hadoop-common</code>, <code>hadoop-aws</code>, the AWS SDK v2 <code>bundle</code>), leaving out every <code>jetty-*</code> jar.</p>
+<p><span class="warn">Either way, prove S3 still works</span> before shipping: a feed that writes its file through s3a and a feed that reads S3 on a Spark pod (QueryStudio's Docker Spark rig does both).</p>
+
+<h2>6 · What QueryStudio's job needs in the image</h2>
+<p>From <code>spark/Dockerfile</code>:</p>
+<table>
+<tr><th>Item</th><th>Why</th><th>On Spark 4.2</th></tr>
+<tr><td><code>spark/jobs/*</code> → <code>/opt/spark/jobs/</code>, mode 644</td><td>the job (<code>generic_feed.py</code> and its mirrored rule modules); <code>ADD &lt;url&gt;</code> writes 600 root-owned, and the job runs as <code>spark</code></td><td>same</td></tr>
+<tr><td><code>requests</code>, <code>paramiko</code> (pip)</td><td>the completion callback, SFTP delivery</td><td>same</td></tr>
+<tr><td>JDBC: ojdbc11, trino-jdbc, snowflake-jdbc, postgresql, mysql-connector-j</td><td>the SQL sources</td><td>same jars. If your set differs, declare it in <code>spark_k8s.image_driver_classes</code>.</td></tr>
+<tr><td><code>hadoop-aws</code> = <b>exactly</b> the image's Hadoop version, plus its AWS SDK</td><td>s3a</td><td>Hadoop 3.5.0 → <code>hadoop-aws-3.5.0</code> + AWS SDK <b>v2</b> <code>software.amazon.awssdk:bundle:2.35.4</code> (not <code>aws-java-sdk-bundle</code> 1.x) <b>+ <code>software.amazon.s3.analyticsaccelerator:analyticsaccelerator-s3:1.3.1</code></b>. Without that last jar every s3a write fails with <code>NoClassDefFoundError: software/amazon/s3/analyticsaccelerator/request/ObjectClient</code> (found on Docker, §10).</td></tr>
+<tr><td><code>iceberg-spark-runtime</code> + <code>iceberg-aws-bundle</code></td><td><b>The Spark pods read Iceberg tables with Iceberg's own reader</b>, at the snapshot QueryStudio pinned. Large Iceberg feeds (40M rows) need it.</td><td class="warn">No <code>iceberg-spark-runtime-4.2</code> exists yet; 1.12.0 covers Spark 4.0 and 4.1. Try <code>iceberg-spark-runtime-4.1_2.13:1.12.0</code> and PROVE it on 4.2 (below).</td></tr>
+<tr><td>Scala suffix</td><td></td><td>everything <code>_2.13</code>: Spark 4 is Scala 2.13 only</td></tr>
+</table>
+<p><b>The Iceberg proof before the image ships:</b> it must pass QueryStudio's merge-on-read check, a real v2 table on AWS with 2,000 position and 150 equality deletes, giving exactly 17,850 rows, the same as the native engine (<code>docs/READ_PLAN_ALL_ENGINES_2026_10_14.html</code>, step 4). A 40M-row Iceberg feed on Spark pods must also match native value for value. If either fails, Iceberg on Spark 4.2 must wait for Iceberg's 4.2 build.</p>
+
+<h2>7 · Check the image before the scanner does</h2>
+<p><b>Jetty copies, per jar, with versions:</b> <code>scripts/spark_image_jetty_scan.py</code> (in the QueryStudio repo, and beside this page in qsd). It exits 1 if any Jetty older than 12.1.10 is present.</p>
+<pre>docker run --rm -v "$PWD/scripts:/s:ro" --entrypoint python3 &lt;your-image&gt; /s/spark_image_jetty_scan.py</pre>
+<p>Measured output on today's image (exit 1):</p>
+<pre>JAR hadoop-client-runtime-3.3.4.jar
+    jetty-client 9.4.43.v20210629   &lt;-- older than 12.1.10
+    ...
+JAR spark-core_2.12-3.5.3.jar
+    jetty-io 9.4.54.v20240208   &lt;-- older than 12.1.10
+    ...
+21 Jetty artifact(s) older than 12.1.10</pre>
+<p><b>Full CVE scan:</b></p>
+<pre>docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image &lt;your-image&gt;</pre>
+<p>Target: the jar scan prints <code>0 Jetty artifact(s) older than 12.1.10</code> and exits 0, and Trivy shows no CVE-2026-2332 or CVE-2026-10050.</p>
+
+<h2>8 · The other two images with the same Jetty</h2>
+<ul>
+  <li><b>The QueryStudio API image</b> installs <code>pyspark</code> 3.5.3 (<code>backend/requirements.txt</code>) for the Spark Connect client. That package bundles the same <code>spark-core</code> and <code>hadoop-client-runtime</code> jars, so the same two CVEs are there. The fix is to replace it with <b><code>pyspark-client</code> 4.2.0</b>: the Connect client only, pure Python with no Java jars, Python ≥ 3.10. That removes Jetty from the API image entirely. The API's two PySpark uses (the Spark Connect session and the Connect test route) work with it.</li>
+  <li><b>The Spark Connect server</b> (<code>k8s/spark-connect/</code>, today <code>apache/spark:3.5.3</code>) has the same Jetty. The client and server must share a major version, so it moves to the same 4.2 image.</li>
+</ul>
+
+<h2>9 · Proof before it ships</h2>
+<p>Hand QueryStudio the new image name. On the Docker Spark rig, these must pass:</p>
+<ol>
+  <li>feeds on Spark pods, every format and delivery;</li>
+  <li>S3 reads, and writes through s3a;</li>
+  <li>the Iceberg merge-on-read check (17,850 exact);</li>
+  <li>the 40M-row and partition-by-key feeds, compared with native;</li>
+  <li>Spark 4's stricter casting (ANSI mode is on by default in Spark 4). A cast that used to give NULL now fails, so check value by value;</li>
+  <li>the jar scan and Trivy on all three images.</li>
+</ol>
+<p>Airflow: no change. Every lane stays available until that decision is made.</p>
+
+<h2>10 · Tested on Docker (2026-10-18)</h2>
+<p>Test image: <code>FROM apache/spark:4.2.0-scala2.13-java21-python3-ubuntu</code>, plus <code>hadoop-aws-3.5.0</code>, <code>bundle-2.35.4</code> and <code>analyticsaccelerator-s3-1.3.1</code>, with Hadoop's Jetty removed (§5, method A).</p>
+<table>
+<tr><th>Check</th><th>Result</th></tr>
+<tr><td>Jar scan after removing Hadoop's Jetty</td><td class="ok"><code>hadoop-client-runtime</code> carries no Jetty: 0 classes, 0 pom files. The 14 artifacts still older than 12.1.10 are all Spark's own 12.1.8 in <code>spark-core</code>, which §4 fixes.</td></tr>
+<tr><td>s3a with Hadoop's Jetty removed: a real Spark 4.2.0 job against MinIO wrote 1,000,000 rows as Parquet and as CSV, then read them back</td><td class="ok">parquet 1,000,000 rows · CSV 1,000,000 rows · sum(v) = 1,499,998,500,000 = expected · test data deleted</td></tr>
+<tr><td>The first attempt, without <code>analyticsaccelerator-s3</code></td><td class="bad">every write failed: <code>NoClassDefFoundError ... analyticsaccelerator/request/ObjectClient</code>. The jar is required on Hadoop 3.5.0.</td></tr>
+<tr><td>Spark 4.2.0 built from source with <code>-Djetty.version=12.1.14</code> (§4)</td><td class="warn">building; results to follow</td></tr>
+</table>
+
+<h2>Sources</h2>
+<ul class="quiet">
+  <li><a href="https://nvd.nist.gov/vuln/detail/CVE-2026-2332">NVD: CVE-2026-2332</a> · <a href="https://github.com/advisories/GHSA-355h-qmc2-wpwf">GHSA-355h-qmc2-wpwf</a> · <a href="https://security.docs.wso2.com/en/latest/security-announcements/cve-justifications/2026/CVE-2026-2332/">WSO2 justification</a> · <a href="https://www.herodevs.com/vulnerability-directory/cve-2026-2332">HeroDevs</a></li>
+  <li><a href="https://www.herodevs.com/vulnerability-directory/cve-2026-10050">HeroDevs: CVE-2026-10050</a> · <a href="https://securelayer7.net/lab/cve-2026-10050-jetty-digest-auth-iso8859-bypass">SecureLayer7</a> · <a href="https://ubuntu.com/security/CVE-2026-10050">Ubuntu</a> · <a href="https://www.sentinelone.com/vulnerability-database/cve-2026-10050/">SentinelOne</a></li>
+  <li>Spark releases: <a href="https://spark.apache.org/releases/spark-release-4.1.0.html">4.1.0</a> · <a href="https://spark.apache.org/releases/spark-release-4-1-2.html">4.1.2</a>. Image tags: Docker Hub <code>apache/spark</code> (4.2.0 tags present on 2026-10-18). Iceberg and Hadoop artifacts: Maven Central metadata, read 2026-10-18.</li>
+</ul>
+</body>
+</html>
