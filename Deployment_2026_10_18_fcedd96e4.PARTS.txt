@@ -1,0 +1,9 @@
+Deployment_2026_10_18_fcedd96e4: 2 parts, each under 24 MB.
+Extract EVERY part into the SAME folder; together they are the whole bundle.
+
+Deployment_2026_10_18_fcedd96e4.part1of2.zip  24.0 MB  473 files  sha256 b67417c493dde978427ce0214a9408750528998e1a2ae292fc9b784b50efcfc7
+    contains: DELETED.txt, MANIFEST.txt, backend, docker-compose.auth-rls.yml, docker-compose.demo.yml, docker-compose.load-users.yml, docker-compose.local.yml, docker-compose.postgresql.yml, docker-compose.production.yml, docker-compose.rig.yml, docker-compose.s3rig.yml, docker-compose.scale.yml, docker-compose.yml, docs, frontend, k8s, rig, scripts
+Deployment_2026_10_18_fcedd96e4.part2of2.zip  0.2 MB  26 files  sha256 93f8302c94dc3383789bf457b98f2e12e47018bc7214926ffc19d5577974996d
+    contains: scripts, spark
+
+499 files in all
