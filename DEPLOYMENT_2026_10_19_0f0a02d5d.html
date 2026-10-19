@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deployment 2026-10-18</title>
+<style>
+  body { font-family: "Segoe UI", system-ui, sans-serif; line-height: 1.55; max-width: 1000px;
+         margin: 2rem auto; padding: 0 1rem; color: #1d1d1f; background: #fff; }
+  h1 { font-size: 1.7rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.2rem; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #ddd; padding: .4rem .55rem; text-align: left; vertical-align: top; font-size: .93rem; }
+  th { background: #f6f6f6; }
+  code, pre { background: #f4f4f4; border-radius: 3px; font-size: .9em; }
+  code { padding: .1rem .3rem; }
+  pre { padding: .6rem .8rem; overflow-x: auto; }
+  .ok { color: #0a6b2d; font-weight: 700; }
+  .warn { color: #8a5a00; font-weight: 700; }
+  .quiet { color: #666; font-size: .92rem; }
+  ol li, ul li { margin: .25rem 0; }
+  @media (max-width: 640px) { table { display: block; overflow-x: auto; } }
+</style>
+</head>
+<body>
+<h1>Deployment &mdash; the 2026-10-18 release (changes only)</h1>
+<p class="quiet">Bundle <code>C:\DEV\outputs\docs\Deployment_2026_10_18_&lt;commit&gt;\</code> and its zip beside it. If the zip comes in parts, extract every part into one folder. <code>Deployment_2026_10_18_&lt;commit&gt;.PARTS.txt</code> lists each part's SHA-256, and <code>MANIFEST.txt</code> names the commit.
+<b>This bundle carries only the deployable files that changed</b> (since 2026-10-19 also the Spark job's snapshot-pin fix and the opt-in Spark 4.2 image, §6b) (backend, frontend, Spark job, charts, Dockerfiles; no docs or test-rig files) since the release running on OpenShift,
+<code>Deployment_2026_10_15_a8259913</code> (<code>docs/DEPLOYMENT_BASE.txt</code>). The bundle tool compared the two file by file.
+The base runbook (pods, build, order) is still <code>docs/DEPLOYMENT_2026_09_23.html</code>, and the release before this one is <code>docs/DEPLOYMENT_2026_10_15.html</code>.</p>
+
+<h2>1 &middot; How to apply a changes-only bundle</h2>
+<ol>
+<li>Start from the source tree you built <code>Deployment_2026_10_15_a8259913</code> from.</li>
+<li>Copy this bundle's files over it at the same paths. Skip <code>MANIFEST.txt</code> and <code>DELETED.txt</code>.</li>
+<li>Delete every path listed in <code>DELETED.txt</code>.</li>
+<li>Rebuild the images that the changed paths belong to:
+  <ul>
+    <li>API / scheduler: anything under <code>backend/</code>;</li>
+    <li>UI: anything under <code>frontend/</code>;</li>
+    <li>Spark job image: anything under <code>spark/</code>.</li>
+  </ul>
+  <code>MANIFEST.txt</code> names the commit and every file. When in doubt, rebuild all of them; they share one commit.</li>
+<li>Roll out. Database changes apply themselves when the pods start (§4).</li>
+</ol>
+
+<h2>2 &middot; What was checked before it shipped</h2>
+<table>
+<tr><th>Check</th><th>Result</th></tr>
+<tr><td>Docker rig rebuilt from EMPTY, every group (<code>rig\rig.ps1 release-check</code>):
+  security, datasets, reports, published-api, feeds, background, config-release, load, spark, spark-reads, starburst, aws</td>
+  <td>37/39 groups passed in one sequence. The two that failed were the feed board proof and the component-health proof. Both failures were in the proofs on a fresh rig, not in the product, and were fixed. They were then re-run on the rebuilt final code: board <span class="ok">44/44</span>, component health <span class="ok">83/83</span>.</td></tr>
+<tr><td>Schema upgrade, on the rig's real PostgreSQL (<code>scripts/docker_proof/schema_upgrade_proof.py</code>)</td>
+  <td><span class="ok">8/8</span>. A database built by the DEPLOYED code (a8259913) and upgraded by this code equals a fresh database:
+  3,398 columns in 260 tables compared by name, type and nullability, and existing rows survive. Mutation check: disabling one migration makes it fail.</td></tr>
+<tr><td>Backend gate (dev box, Python 3.14)</td><td><span class="ok">38,792 passed</span> on the final code. 2 failures were a test fake, now fixed. 1 timing failure passed when re-run alone.</td></tr>
+<tr><td>CI replica (Python 3.11, no network: what CI runs)</td><td><span class="ok">38,725 passed, 0 failed</span> (38 min) on the final code. Earlier runs tonight found three real defects in component health, all fixed.</td></tr>
+<tr><td><b>Nothing without a login</b> (<code>scripts/docker_proof/no_login_configured_proof.py</code>, on the release image)</td><td><span class="ok">16/16</span>. A server with no auth settings, as on your OpenShift, refuses an anonymous caller on all 417 read routes. The only exceptions are health, the login page config, the version, the docs and the worker probes. A server with <code>auth.type=none</code> set deliberately still serves its guest, as the control.</td></tr>
+<tr><td>Frontend: <code>tsc --noEmit</code> + vitest</td><td><span class="ok">clean; 333/333 test files</span></td></tr>
+</table>
+
+<h2>3 &middot; Your three OpenShift reports, and what fixes each</h2>
+<table>
+<tr><th>What you saw</th><th>Why</th><th>What to do</th></tr>
+<tr><td><b>"QueryStudio was updated &mdash; this tab is running an older build"</b>, again and again</td>
+  <td>The UI's build id was the build TIME. Every UI replica, and every rebuild of the same code, had a different id, so a tab whose requests landed on a different replica was told it was old.</td>
+  <td>Fixed in this bundle (<code>frontend/vite.config.ts</code>). The build id is now a hash of the SOURCE, so every replica built from the same code agrees. Rebuild the UI image.</td></tr>
+<tr><td><b>The UI is logged in as "guest", and anyone could see every connection</b></td>
+  <td><b>A security defect, fixed in this bundle.</b> The pods never received an auth configuration, and the old default (<code>auth.type</code> = <code>none</code>) made every visitor a guest ADMIN.
+  <b>Now no login configured means login REQUIRED.</b> With this release:
+  <ul>
+    <li>every API call without a signed-in user is refused (401);</li>
+    <li>the UI shows the login page, with a notice that sign-in is not configured;</li>
+    <li>the API log says <code>LOGIN REQUIRED but NOT CONFIGURED</code>.</li>
+  </ul>
+  Guest mode exists only if someone deliberately sets <code>auth.type=none</code>. Proven on the release image: all 417 read routes refused an anonymous caller. The walk also found four routes that answered without a login, and they are closed too.</td>
+  <td>Give every backend deployment (API and scheduler) the SAME auth settings, as environment variables (§5). Until then, <b>nobody can sign in except a super admin</b>. Check that <code>GET /auth/config</code> answers <code>"type": "ad"</code>.</td></tr>
+<tr><td><b>"Session expired" on every query</b>, and re-entering credentials does not help</td>
+  <td>It follows from the auth settings above. With no shared auth configuration, a pod that did not issue the session does not accept it.</td>
+  <td>The same auth settings, and the same <code>QUERY_STUDIO_SECRET_KEY</code>, on every backend pod (§5, §6). Then sign in once.</td></tr>
+</table>
+
+<h2>4 &middot; Database changes &mdash; automatic</h2>
+<p>Nothing to run by hand. At start-up the API:</p>
+<ul>
+  <li>creates each new table;</li>
+  <li>adds each new column to the existing tables (<code>ADD COLUMN IF NOT EXISTS</code>);</li>
+  <li>applies the one column change this release has: <code>api_access_log.view_id</code> becomes nullable.</li>
+</ul>
+<p>The schema proof in §2 is exactly this road.</p>
+<table>
+<tr><th>New tables (11)</th><td><code>component_health</code>, <code>component_health_events</code>, <code>component_intents</code>,
+  <code>config_releases</code>, <code>release_mappings</code>, <code>encryption_data_keys</code>,
+  <code>published_api_alert_state</code>, <code>published_api_alert_thresholds</code>, <code>published_api_call_rollups</code>,
+  <code>published_api_ingest_health</code>, <code>published_api_rollup_state</code></td></tr>
+<tr><th>Columns added to existing tables</th><td>41. The list is in <code>scripts/docker_proof/schema-upgrade-results.json</code>.</td></tr>
+</table>
+
+<h2>5 &middot; Configuration without the Helm chart: environment variables</h2>
+<p>You do not need the chart's ConfigMaps. <b>Every config key can be set as an environment variable</b>:
+<code>QUERYSTUDIO_&lt;SECTION&gt;_&lt;KEY&gt;</code>, which overrides <code>config.json</code>. For a whole section, give its value as JSON.
+Keep these values in ONE ConfigMap (and one Secret for passwords), and attach both to every backend deployment:</p>
+<pre>oc create configmap qs-auth \
+  --from-literal=QUERYSTUDIO_AUTH_TYPE=ad \
+  --from-literal=QUERYSTUDIO_AUTH_AD_SERVER=ldaps://&lt;your-dc&gt;:636 \
+  --from-literal=QUERYSTUDIO_AUTH_AD_DOMAIN=&lt;DOMAIN&gt; \
+  --from-literal=QUERYSTUDIO_AUTH_AD_BASE_DN="DC=...,DC=..." \
+  --from-literal=QUERYSTUDIO_AUTH_AD_ADMIN_GROUPS='["&lt;admin group&gt;"]' \
+  --from-literal=QUERYSTUDIO_AUTH_AD_ANALYST_GROUPS='["&lt;analyst group&gt;"]' \
+  --from-literal=QUERYSTUDIO_AUTH_AD_VIEWER_GROUPS='["&lt;viewer group&gt;"]' \
+  --from-literal=QUERYSTUDIO_AUTH_AD_SERVICE_ACCOUNT=&lt;svc account&gt;
+oc create secret generic qs-auth-secret --from-literal=QUERYSTUDIO_AUTH_AD_SERVICE_PASSWORD=&lt;password&gt;
+
+for d in &lt;api deployment&gt; &lt;scheduler deployment&gt;; do
+  oc set env deploy/$d --from=configmap/qs-auth
+  oc set env deploy/$d --from=secret/qs-auth-secret
+done</pre>
+
+<h3>Configuration releases UAT &rarr; PROD (Admin &rarr; Governance &rarr; Releases)</h3>
+<p>Each environment says which one it is. Set this on the backend deployments of each environment:</p>
+<pre># UAT
+QUERYSTUDIO_FEED_GENERATION_GOVERNANCE='{"enabled": true, "mode": "enforced", "environment": "uat",
+  "git_truth_environments": ["prod"],
+  "release": {"four_eyes_environments": ["prod"], "require_ticket_environments": ["prod"]}}'
+# PROD: the same, with "environment": "prod"</pre>
+<p>New in this bundle, for that screen:</p>
+<ul>
+  <li>Scope "feed" lets you <b>pick the feeds</b>. Each one brings everything it depends on: its saved queries, calendars, connections by name, and so on.</li>
+  <li>The plan lists <b>what WILL be released</b>, by kind, apart from what cannot be.</li>
+  <li>"Exclude all N and plan again" removes the objects that cannot be released.</li>
+  <li>Export stays disabled while an unresolved problem remains.</li>
+</ul>
+
+<h2>6 &middot; Encryption: one key, the API owns it</h2>
+<ul>
+  <li>Stored credentials are envelope-encrypted. The master key (<code>QUERY_STUDIO_SECRET_KEY</code>) wraps the data keys held in the new table <code>encryption_data_keys</code>.</li>
+  <li><b>Every component must get the SAME <code>QUERY_STUDIO_SECRET_KEY</code></b> (API, scheduler, workers), as in 2026-10-15 §2a. Only the API creates keys; the other components wait for them.</li>
+  <li><code>encryption_data_keys</code> belongs to its ENVIRONMENT. A configuration release never carries it: PROD's keys are wrapped by PROD's master.</li>
+  <li>A credential save refused for want of a key now answers 503, with the fix in the message, on every route.</li>
+</ul>
+
+<h2>6b &middot; The Spark job image: Jetty CVEs (CVE-2026-2332, CVE-2026-10050)</h2>
+<p>This bundle carries three Spark files.</p>
+<ul>
+  <li><b><code>spark/jobs/generic_feed.py</code></b>: the job now pins an Iceberg snapshot in the way its Spark version accepts. Spark 4.2 refuses the old option, and Spark 3.5 silently ignores the new one, so the job chooses by version. <b>Rebuild your Spark job image with this file even if you stay on Spark 3.5.</b> Proven on 3.5: 41/41, 7/7, 10/10 on the pods.</li>
+  <li><b><code>spark/Dockerfile.spark42</code></b> and <b><code>spark/scripts/strip_hadoop_jetty.py</code></b>: the TESTED Spark 4.2 + Jetty 12.1.14 image, which clears both Jetty CVEs. It is <b>opt-in</b>: the default <code>spark/Dockerfile</code> is still Spark 3.5.3.</li>
+</ul>
+<p>How to build it, and every test behind it, is in <code>SPARK_IMAGE_JETTY_2026_10_19_v5.html</code> (on qsd; §0 is the recipe). In short:</p>
+<ol>
+  <li>build Spark 4.2.0 from source with <code>-Djetty.version=12.1.14 -Phive -Phive-thriftserver</code>;</li>
+  <li>build the image with <code>Dockerfile.spark42</code>;</li>
+  <li>in QueryStudio, set the Spark image to it and the <b>driver memory to 2g</b>.</li>
+</ol>
+<p class="warn"><b>Do not use an image with Jetty removed from <code>spark-core</code>.</b> It passes the scan, and every Spark job fails at start-up.</p>
+<p>Iceberg on Spark 4.2 uses Iceberg's nightly 1.13 build. Every test passed with it, including real AWS merge-on-read, but swap in the 1.13.0 release when it is published.</p>
+
+<h2>7 &middot; Other defects fixed (headline)</h2>
+<ul>
+  <li><b>Query builder:</b> right-click &rarr; Preview of a table showed nothing. The preview ran without the connection, read the result before the run finished, and hid every error. It now shows the rows, or the reason it cannot.</li>
+  <li><b>Scheduler:</b> ONE election for the single-runner duties. The API pod and the scheduler pod were both "leader" for three of them.</li>
+  <li><b>Security:</b> a cross-user leak through a shared cache slot, closed.</li>
+  <li><b>Feeds on Spark pods:</b>
+    <ul>
+      <li>a re-run attempt is handed to the job;</li>
+      <li>steps the job performs are closed from its own report;</li>
+      <li>a step completes only when the job reported the file size.</li>
+    </ul></li>
+  <li><b>Published APIs:</b>
+    <ul>
+      <li>the <code>view_id</code> migration that never ran on PostgreSQL now runs;</li>
+      <li>calls were counted twice, and rows served were over-reported by 2%;</li>
+      <li>the dashboard read 0 on Python 3.11.</li>
+    </ul></li>
+  <li><b>Component Health</b> (Admin &rarr; Monitoring) is new. It is one page built from a registry:
+    <ul>
+      <li>pods that are gone retire, and the ROLE row is what alerts;</li>
+      <li>a draining pod is shown as draining.</li>
+    </ul></li>
+</ul>
+
+<h2>8 &middot; After the rollout: check these</h2>
+<ol>
+  <li><code>GET /auth/config</code> answers <code>"type": "ad"</code>, and signing in shows your name, not "guest".</li>
+  <li>Run a query twice: there is no "session expired".</li>
+  <li>Reload the UI a few times: there is no "older build" banner.</li>
+  <li>Admin &rarr; Monitoring &rarr; Component Health: every pod is listed, and the scheduler row is healthy.</li>
+  <li><code>GET /api/admin/encryption-key</code> reports a key, and a saved connection's Test succeeds.</li>
+  <li>In the query builder, right-click a table &rarr; Preview shows its rows.</li>
+</ol>
+
+<h2>9 &middot; Rollback</h2>
+<p>You chose to deploy without a database backup. Know what that means for a rollback:</p>
+<ul>
+  <li>The new tables and columns are additive, and the old code ignores them.</li>
+  <li><code>api_access_log.view_id</code> stays nullable, which is harmless to the old code.</li>
+  <li><b>Stored credentials are different.</b> Once this release starts, it encrypts them with its data keys (<code>encryption_data_keys</code>). The 2026-10-15 code cannot read those.</li>
+</ul>
+<p>To roll back, redeploy the <code>Deployment_2026_10_15_a8259913</code> images, then re-enter each connection's password (Admin &rarr; Connections), because the old code cannot read the re-encrypted ones.
+Never drop <code>encryption_data_keys</code> while this release is running.</p>
+</body>
+</html>
