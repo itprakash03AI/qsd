@@ -1,0 +1,71 @@
+# QueryStudio Spark job image on Spark 4.2 with Jetty 12.1.14 (2026-10-19)
+#
+# Clears CVE-2026-2332 and CVE-2026-10050 (both need Jetty >= 12.1.10).  Every step
+# below was found necessary on Docker -- docs/SPARK_IMAGE_JETTY_2026_10_18.html §11.
+#
+# 1. Build Spark 4.2.0 from source with the newer Jetty (needs git, python3 AND zip):
+#      ./dev/make-distribution.sh --name qs-jetty12114 --tgz \
+#          -Pkubernetes -Phadoop-cloud -Phive -Phive-thriftserver \
+#          -Djetty.version=12.1.14 -DskipTests
+#    -Phive is REQUIRED: the job's Iceberg catalog loads Iceberg's HiveCatalog
+#    (NoClassDefFoundError .../hive/metastore/api/NoSuchObjectException without it).
+# 2. Put the tarball next to this file as spark-dist.tgz (git-ignored), then:
+#      docker build -f Dockerfile.spark42 -t <registry>/querystudio/spark-etl:<tag> .
+# 3. Check it: python3 scripts/spark_image_jetty_scan.py inside the image must
+#    exit 0 ("0 Jetty artifact(s) older than 12.1.10").
+#
+# ICEBERG: no RELEASED Iceberg runtime for Spark 4.2 exists yet; the 4.1 runtime FAILS
+# on 4.2 (IncompatibleClassChangeError).  ICEBERG_SPARK_RUNTIME below is the nightly
+# 1.13.0-SNAPSHOT that passed the merge-on-read test -- replace it with the 1.13.0
+# release before production.
+ARG ICEBERG_SPARK_RUNTIME=https://repository.apache.org/content/repositories/snapshots/org/apache/iceberg/iceberg-spark-runtime-4.2_2.13/1.13.0-SNAPSHOT/iceberg-spark-runtime-4.2_2.13-1.13.0-20261019.002953-32.jar
+ARG ICEBERG_AWS_BUNDLE=https://repository.apache.org/content/repositories/snapshots/org/apache/iceberg/iceberg-aws-bundle/1.13.0-SNAPSHOT/iceberg-aws-bundle-1.13.0-20261019.002953-32.jar
+
+FROM apache/spark:4.2.0-scala2.13-java21-python3-ubuntu AS dist
+USER root
+COPY spark-dist.tgz /tmp/
+RUN mkdir /dist && tar -xzf /tmp/spark-dist.tgz -C /dist --strip-components=1
+
+# the official 4.2.0 image gives the OS, Java 21, Python, /opt/entrypoint.sh and user 185;
+# its jars and python are REPLACED by the rebuilt distribution's
+FROM apache/spark:4.2.0-scala2.13-java21-python3-ubuntu
+ARG ICEBERG_SPARK_RUNTIME
+ARG ICEBERG_AWS_BUNDLE
+USER root
+RUN rm -rf /opt/spark/jars /opt/spark/python
+COPY --from=dist /dist/jars /opt/spark/jars
+COPY --from=dist /dist/python /opt/spark/python
+
+RUN pip install --no-cache-dir requests "paramiko>=3.0.0,<6"
+
+# JDBC drivers.  trino-jdbc 455 FAILS on Spark 4.2 (NoClassDefFoundError
+# io/opentelemetry/semconv/HttpAttributes: Spark 4.2 ships OpenTelemetry 1.49); 484 works.
+ADD https://download.oracle.com/otn-pub/otn_software/jdbc/233/ojdbc11.jar /opt/spark/jars/
+ADD https://repo1.maven.org/maven2/io/trino/trino-jdbc/484/trino-jdbc-484.jar /opt/spark/jars/
+ADD https://repo1.maven.org/maven2/net/snowflake/snowflake-jdbc/3.16.1/snowflake-jdbc-3.16.1.jar /opt/spark/jars/
+ADD https://repo1.maven.org/maven2/org/postgresql/postgresql/42.7.3/postgresql-42.7.3.jar /opt/spark/jars/
+ADD https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/8.4.0/mysql-connector-j-8.4.0.jar /opt/spark/jars/
+
+# s3a: -Phadoop-cloud brings hadoop-aws 3.5.0 + the AWS SDK v2 bundle; Hadoop 3.5.0's s3a
+# ALSO needs the analytics accelerator (NoClassDefFoundError ...analyticsaccelerator... without it)
+ADD https://repo1.maven.org/maven2/software/amazon/s3/analyticsaccelerator/analyticsaccelerator-s3/1.3.1/analyticsaccelerator-s3-1.3.1.jar /opt/spark/jars/
+
+# Iceberg (see the note at the top)
+ADD ${ICEBERG_SPARK_RUNTIME} /opt/spark/jars/
+ADD ${ICEBERG_AWS_BUNDLE} /opt/spark/jars/
+
+# Hadoop's shaded Jetty 9.4 has no fix: REMOVE it (s3a never loads it -- proven).
+# NEVER remove spark-core's Jetty: SparkContext cannot start without it (proven).
+COPY scripts/strip_hadoop_jetty.py /opt/qs/strip_hadoop_jetty.py
+RUN chmod 644 /opt/spark/jars/*.jar && python3 /opt/qs/strip_hadoop_jetty.py && rm -rf /opt/qs
+
+COPY jobs/ /opt/spark/jobs/
+COPY conf/log4j2.properties /opt/spark/log4j2.properties
+COPY pod-templates/ /opt/spark/pod-templates/
+RUN chmod 644 /opt/spark/pod-templates/*.yaml \
+ && chgrp -R 0 /opt/spark/work-dir /opt/spark/jobs \
+ && chmod -R g=u /opt/spark/work-dir \
+ && chmod g=u /etc/passwd
+
+USER 185
+ENTRYPOINT ["/opt/entrypoint.sh"]
