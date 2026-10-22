@@ -1,0 +1,7 @@
+Patch_2026_10_22_9778aad05: 1 parts, each under 24 MB.
+Extract EVERY part into the SAME folder; together they are the whole bundle.
+
+Patch_2026_10_22_9778aad05.zip  0.1 MB  3 files  sha256 ec0cf3966cc82fae3e2f018d142d5e36a52cc0e177bfa32c015ae2de04758937
+    contains: DELETED.txt, MANIFEST.txt, backend
+
+3 files in all
