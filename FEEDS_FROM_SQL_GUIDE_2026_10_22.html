@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Feeds From SQL</title>
+<style>
+:root{--fg:#1f2328;--muted:#59636e;--line:#d1d9e0;--ok:#1a7f37;--bad:#cf222e;--bg:#fff;--code:#f6f8fa}
+@media (prefers-color-scheme:dark){:root{--fg:#e6edf3;--muted:#9198a1;--line:#3d444d;--bg:#0d1117;--code:#161b22}}
+body{font:15px/1.55 system-ui,-apple-system,Segoe UI,sans-serif;color:var(--fg);background:var(--bg);max-width:1100px;margin:0 auto;padding:24px 16px}
+h1{font-size:26px;margin:0 0 4px}h2{font-size:19px;margin:30px 0 8px;border-bottom:1px solid var(--line);padding-bottom:4px}
+.sub{color:var(--muted)}code{background:var(--code);padding:1px 5px;border-radius:4px;font-size:13px}
+pre{background:var(--code);padding:12px;border-radius:6px;overflow-x:auto;font-size:13px;line-height:1.45}
+table{border-collapse:collapse;width:100%;margin:8px 0}td,th{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}th{background:var(--code)}
+.ok{color:var(--ok);font-weight:700}.bad{color:var(--bad);font-weight:700}.wrap{overflow-x:auto}
+</style></head><body>
+<h1>Setting up thousands of feeds from SQL</h1>
+<p class="sub">For the team setting up the month-end feeds (one feed per system entity and event, from the two shared queries). Works on QueryStudio's own PostgreSQL database.</p>
+
+<h2>1 · The idea in one paragraph</h2>
+<p>You describe a feed once, as a <b>template</b> with blanks (<code>{SYSTEM_ENTITY}</code>, <code>{EventCode}</code>). Then you give it a list of values. QueryStudio creates one feed per row of the list. Every feed gets the same checks as one made on screen: name rules, file-name clashes, dependency loops, password handling and version history. You do this with one SQL call, the way you would call a procedure in an Oracle package:</p>
+<pre>SELECT qs_feed_template_apply(...);   -- returns a request number
+SELECT * FROM qs_feed_template_apply_status;   -- what happened</pre>
+<p>Within about 10 seconds QueryStudio picks the request up and applies it in the background, then writes the result into the status view.</p>
+
+<h2>2 · Why not insert into the feed tables directly?</h2>
+<p>An <code>INSERT</code> into <code>feed_configs</code> skips every check above. It would also store the SFTP password unencrypted, leave the dependencies unregistered and record no version history. A wrong row would only show up at month end, as a failed or missing file. The function goes through the same path as the screen, so a bad row is refused at once, with a reason.</p>
+
+<h2>2b · The ready-to-run script (2026-10-22)</h2>
+<p><b><code>scripts/sql/feeds_from_shared_query.sql</code></b> wraps the call below for feeds on ONE shared query (an SQL file).</p>
+<ol>
+  <li><b>Edit two blocks with names, never IDs:</b>
+    <ul>
+      <li>the settings: template, SQL file, connections, SFTP, schedule, SLA, dependencies;</li>
+      <li>the entity list: <code>VALUES</code> rows, or a <code>SELECT</code> from your own table.</li>
+    </ul></li>
+  <li><b>Run the whole file</b> in any PostgreSQL client: psql, DBeaver or pgAdmin.</li>
+</ol>
+<p>The script:</p>
+<ul>
+  <li><b>checks every name first</b>, and stops with the reason if one does not exist;</li>
+  <li><b>runs with <code>dry_run = true</code> to preview</b>; set it to false to apply;</li>
+  <li><b>prints the result</b>: created, updated, unchanged and refused, with the reason for each refusal.</li>
+</ul>
+<p>The request state goes <code>pending</code> → <code>running</code> → <code>done</code> (or <code>failed</code>).</p>
+<p class="quiet">Proven on the Docker rig, <code>scripts/docker_proof/feeds_from_sql_script_proof.py</code>, 14/14. The script was run with psql. The dry run wrote nothing. A misspelt name stopped it with the reason. The real run created 3 feeds, each reading the shared SQL file, with the SFTP password encrypted. One feed ran and delivered to SFTP exactly the 5 rows Trino returns for its entity, with the token filled. Running the script again left every feed unchanged.</p>
+
+<h2>3 · Step by step</h2>
+<p><b>Step 1 — try it without writing anything</b> (<code>p_dry_run =&gt; true</code>). The status view says how many feeds would be created, changed or refused, and why.</p>
+<pre>SELECT qs_feed_template_apply(
+  p_template     =&gt; 'FACT_TETB_MONTH_END',
+  p_parameters   =&gt; '["SYSTEM_ENTITY","EventCode"]',
+  p_feed         =&gt; '{
+      "name": "FACT_TETB_{SYSTEM_ENTITY}_{EventCode}",
+      "description": "Month end, both sides of the shared fact_tetb query",
+      "source_type": "sql_file", "source_id": 19, "connection_id": 613,
+      "output_format": "csv",
+      "output_filename_template": "fact_tetb_{SYSTEM_ENTITY}_{EventCode}_{business_date:YYYYMMDD}_{run_date:YYYYMMDD}.csv",
+      "destination_type": "sftp",
+      "destination_config": {"host": "sftp.example", "port": 22, "remote_dir": "/inbox",
+                             "username": "feeduser", "password": "the SFTP password",
+                             "host_key_b64": "AAAA..."},
+      "schedule_declaration": {"kind": "month_end"},
+      "sla_to": "18:00", "sla_timezone": "Europe/London"}',
+  p_dependencies =&gt; '[
+      {"dependency_type": "ORACLE_TABLE",
+       "dependency_key": "finance_sl_balance_{SYSTEM_ENTITY}_{EventCode}_CLOUD",
+       "arrival_sources": [{"kind": "kafka", "topic": "qs.kafka.message"},
+                           {"kind": "oracle_table", "connection_id": 3, "table": "QS_KAFKA_MESSAGE"}],
+       "require_mode": "any"},
+      {"dependency_type": "ORACLE_TABLE",
+       "dependency_key": "finance_sl_balance_{SYSTEM_ENTITY}_{EventCode}_ONPREM",
+       "arrival_sources": [{"kind": "kafka", "topic": "qs.kafka.message"},
+                           {"kind": "oracle_table", "connection_id": 3, "table": "QS_KAFKA_MESSAGE"}],
+       "require_mode": "any"}]',
+  p_matrix       =&gt; (SELECT jsonb_agg(jsonb_build_object('SYSTEM_ENTITY', code, 'EventCode', event))
+                       FROM my_entity_list),          -- any table or query you have
+  p_dry_run      =&gt; true);</pre>
+<p><b>Step 2 — check the result:</b></p>
+<pre>SELECT request_id, state, created, updated, unchanged, conflicts, refused, error
+  FROM qs_feed_template_apply_status ORDER BY request_id DESC LIMIT 5;
+
+-- the reason for each refused row:
+SELECT r -&gt;&gt; 'name', r -&gt;&gt; 'reason'
+  FROM qs_feed_template_apply_status s, json_array_elements(s.report::json -&gt; 'refused') r
+ WHERE s.request_id = 42;</pre>
+<p><b>Step 3 — run the same call with <code>p_dry_run =&gt; false</code></b> (or leave it out). The second shared query (<code>fact_tetb_ext</code>) is a second template: same call, its own name, its own SQL file and its own dependency names.</p>
+<p><b>Later — new entities.</b> Call again with only the template name and the new full list. Feeds that already exist come back as "unchanged", and only new rows become feeds:</p>
+<pre>SELECT qs_feed_template_apply(p_template =&gt; 'FACT_TETB_MONTH_END',
+  p_matrix =&gt; (SELECT jsonb_agg(jsonb_build_object('SYSTEM_ENTITY', code, 'EventCode', event)) FROM my_entity_list));</pre>
+<p><b>Change something for all of them</b> (for example the SLA): pass <code>p_feed</code> again with the change. Every member is updated, and each change is recorded in that feed's version history.</p>
+<p><b>Remove entities:</b> pass the reduced list with <code>p_retire_missing =&gt; true</code>. Feeds no longer in the list are retired (switched off and kept in history), never deleted.</p>
+
+<h2>4 · What to know</h2>
+<div class="wrap"><table>
+<tr><th>Topic</th><th>How it works</th></tr>
+<tr><td>Names</td><td>Feed names follow the same rule as the feed screen: upper case, and hyphens, spaces and dots become <code>_</code>. Entity <code>SAP-2920-EMEA</code> gives <code>FACT_TETB_SAP_2920_EMEA_EOD</code>. Dependency names and file names keep the entity exactly as written, so they match the upstream messages.</td></tr>
+<tr><td>Passwords</td><td>Stored <b>encrypted</b> in every table: the feed, the template, its version history, and the request row (encrypted when QueryStudio picks it up, within about 10 seconds). Nobody reading the database sees them.</td></tr>
+<tr><td>Who may do this</td><td>Anyone who can run the function can change every feed, so grant <code>EXECUTE ON FUNCTION qs_feed_template_apply</code> only to the release or DBA role. The status view shows who asked (the database login, or <code>p_requested_by</code>).</td></tr>
+<tr><td>Speed</td><td>Measured on the test system: 200 feeds in 44 s; a check of 5,000 in 4 s. A real 5,000 takes roughly 2 minutes in the background. Large requests never block the screen.</td></tr>
+<tr><td>If QueryStudio restarts mid-way</td><td>A request still "running" after 30 minutes is applied again. That is safe: feeds already made come back "unchanged".</td></tr>
+<tr><td>Where the function comes from</td><td>QueryStudio creates <code>qs_feed_template_apply</code> and <code>qs_feed_template_apply_status</code> itself in its own PostgreSQL database, shortly after it starts. There is nothing to install.</td></tr>
+</table></div>
+
+<h2>5 · Proven on the test system</h2>
+<div class="wrap"><table>
+<tr><th>Step</th><th>Result</th></tr>
+<tr><td>One SQL call: template + 200 month-end feeds on the shared query, CLOUD + ON-PREM dependencies per entity, SFTP</td><td class="ok">200 created, 0 refused, 44 s</td></tr>
+<tr><td>Names from <code>SAP-0007-EMEA</code></td><td class="ok"><code>FACT_TETB_ME_PROOF_SAP_0007_EMEA_EOD</code>; dependencies <code>finance_sl_balance_SAP-0007-EMEA_EOD_CLOUD / _ONPREM</code></td></tr>
+<tr><td>SFTP password in the database (feeds, template, request)</td><td class="ok">encrypted (<code>enc::…</code>) in all 200 feeds, the template and the request</td></tr>
+<tr><td>Dry run of 5,000 (2,500 entities × EOD/EOM)</td><td class="ok">4,800 new + 200 unchanged, 0 refused, 4 s, nothing written</td></tr>
+<tr><td>Retire from SQL (empty list + <code>p_retire_missing</code>)</td><td class="ok">200 retired, 3.6 s</td></tr>
+</table></div>
+<p class="sub">Code: <code>backend/core/feed/template_requests.py</code>. Tests: <code>backend/tests/test_feed_template_requests_from_sql_2026_10_13.py</code>.</p>
+</body></html>
