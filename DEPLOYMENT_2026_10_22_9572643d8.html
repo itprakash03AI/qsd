@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deployment 2026-10-22</title>
+<style>
+  body { font-family: "Segoe UI", system-ui, sans-serif; line-height: 1.55; max-width: 1000px;
+         margin: 2rem auto; padding: 0 1rem; color: #1d1d1f; background: #fff; }
+  h1 { font-size: 1.7rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.2rem; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #ddd; padding: .4rem .55rem; text-align: left; vertical-align: top; font-size: .93rem; }
+  th { background: #f6f6f6; }
+  code, pre { background: #f4f4f4; border-radius: 3px; font-size: .9em; }
+  code { padding: .1rem .3rem; }
+  pre { padding: .6rem .8rem; overflow-x: auto; }
+  .ok { color: #0a6b2d; font-weight: 700; }
+  .warn { color: #8a5a00; font-weight: 700; }
+  .quiet { color: #666; font-size: .92rem; }
+  li { margin: .25rem 0; }
+  @media (max-width: 640px) { table { display: block; overflow-x: auto; } }
+</style>
+</head>
+<body>
+<h1>Deployment &mdash; 2026-10-22 (changes only)</h1>
+<p class="quiet">Bundle <code>Deployment_2026_10_22_&lt;commit&gt;.zip</code> (on qsd). <b>It holds only the deployable files changed since <code>Deployment_2026_10_19_0f0a02d5d</code></b>, the release you run now. <code>MANIFEST.txt</code> in the zip names the commit and every file; <code>DELETED.txt</code> lists files to remove.</p>
+
+<h2>1 · First: the master key comes from your pipeline, for EVERY component</h2>
+<p><b>Why the scheduler and other components failed last time:</b> only the API was given the master key. Connection passwords are stored encrypted, and every component that uses a connection must decrypt them with the <b>same</b> key:</p>
+<ul>
+  <li>the scheduler (feeds);</li>
+  <li>the executor;</li>
+  <li>reports;</li>
+  <li>the published API;</li>
+  <li>connection health checks.</li>
+</ul>
+<p>The pods still start without the key, but any work that needs a password fails.</p>
+<p><b>QueryStudio reads the key from the environment first</b> (<code>QUERY_STUDIO_SECRET_KEY</code>), on every component. No code change is needed. Your pipeline only has to:</p>
+<ol>
+  <li>read the master key <b>once</b> from Vault;</li>
+  <li>inject it as <code>QUERY_STUDIO_SECRET_KEY</code> into <b>all five</b> deployments: api, scheduler, executor, reports, published-api.</li>
+</ol>
+<pre># example: one Secret, attached to every deployment
+oc create secret generic qs-master-key --from-literal=QUERY_STUDIO_SECRET_KEY="$KEY_FROM_VAULT"
+for d in &lt;api&gt; &lt;scheduler&gt; &lt;executor&gt; &lt;reports&gt; &lt;published-api&gt;; do
+  oc set env deploy/$d --from=secret/qs-master-key
+done</pre>
+<p><b>It must be the key the API has been using.</b> If the API ever created its own key file, use that value in Vault. A different key cannot read the passwords already saved.</p>
+<p><b>Check after the restart:</b></p>
+<ul>
+  <li>no pod logs <code>WAITING for the key</code> or <code>MASTER KEY MISMATCH</code>;</li>
+  <li>Admin → Monitoring → Component Health shows the connections healthy;</li>
+  <li>a connection's <b>Test</b> button succeeds.</li>
+</ul>
+<p class="quiet">Reproduced on the rig on 2026-10-22: a scheduler with no key logs "WAITING for the key … Set QUERY_STUDIO_SECRET_KEY for every component", and one with a different key logs "MASTER KEY MISMATCH". Both keep running; only the work that needs a password fails.</p>
+
+<h2>2 · What this bundle changes</h2>
+<table>
+<tr><th>Change</th><th>Where you see it</th><th>Proven</th></tr>
+<tr><td><b>A query tab no longer takes over another tab's running query.</b> Tab 2 showed Cancel with Execute greyed while tab 1 ran, and its Cancel would have cancelled tab 1's query.</td><td>Query Editor tabs</td><td class="ok">unit test (fails without the fix) · browser, both streaming modes</td></tr>
+<tr><td><b>Control-file preview</b>: the control file a run would write, rendered over dummy data by the run's own code.</td><td>Feed form → Contract → "Preview control file"</td><td class="ok">4 tests · browser</td></tr>
+<tr><td><b>Control file compressed like the data file</b> (<code>.ctl.gz</code>). Refused at save when the data file is not compressed.</td><td>Feed form → Contract → "Control file compression"</td><td class="ok">Docker, real runs 14/14 · browser</td></tr>
+<tr><td><b>The control file's name is the same on every lane.</b> The Spark lane's QueryStudio delivery ignored the feed's control-file name template, and wrote no control file for a template-only feed.</td><td>Feeds on the Spark lane</td><td class="ok">test (fails without the fix)</td></tr>
+<tr><td><b><code>/feeds</code> uses the screen</b>: no 1,400 px centred box, two-line rows, one "Output" column. At 1,920 px it shows 13 feeds instead of 8, and at 1,280 px nothing is cut off.</td><td><code>/feeds</code></td><td class="ok">screen walk 0 flags at 1,280 px</td></tr>
+<tr><td><b>A Spark run that QueryStudio delivers records its file size</b>; it showed 0 bytes.</td><td>Feed run details</td><td class="ok">Docker: 139 bytes, was 0</td></tr>
+</table>
+<p>"Checksum of" on the Contract step (the file sent, or the raw data file before compression) already existed. The preview now honours it.</p>
+
+<h2>3 · Apply</h2>
+<ol>
+  <li>Make sure §1 is done: the same <code>QUERY_STUDIO_SECRET_KEY</code> on all five deployments.</li>
+  <li>Unzip over the source tree you built <code>0f0a02d5d</code> from, then delete the paths in <code>DELETED.txt</code>.</li>
+  <li>Rebuild the images for the folders that changed, as listed in <code>MANIFEST.txt</code>:
+    <ul>
+      <li><code>backend/</code> → the API image (also used by the scheduler, executor, reports and published API);</li>
+      <li><code>frontend/</code> → the UI image;</li>
+      <li><code>spark/</code> → the Spark job image.</li>
+    </ul></li>
+  <li>Roll out. There are no database changes in this bundle.</li>
+</ol>
+
+<h2>4 · Not in the zip (run by hand when needed)</h2>
+<ul>
+  <li><code>feeds_from_shared_query.sql</code> (on qsd): sets up many feeds on one shared query, directly in PostgreSQL. Proven 14/14 with psql.</li>
+</ul>
+</body>
+</html>
