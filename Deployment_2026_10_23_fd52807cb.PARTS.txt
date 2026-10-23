@@ -1,0 +1,7 @@
+Deployment_2026_10_23_fd52807cb: 1 parts, each under 24 MB.
+Extract EVERY part into the SAME folder; together they are the whole bundle.
+
+Deployment_2026_10_23_fd52807cb.zip  0.5 MB  17 files  sha256 c657080b5ce1c5ac6ce78df37b2c35bd4f3c06e18f6644d87537e86271549065
+    contains: DELETED.txt, MANIFEST.txt, backend, frontend, k8s, scripts
+
+17 files in all
