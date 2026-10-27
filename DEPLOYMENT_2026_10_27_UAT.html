@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UAT Setup 2026-10-27</title>
+<style>
+  body { font-family: "Segoe UI", system-ui, sans-serif; line-height: 1.55; max-width: 1000px;
+         margin: 2rem auto; padding: 0 1rem; color: #1d1d1f; background: #fff; }
+  h1 { font-size: 1.7rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.2rem; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
+  h3 { font-size: 1.02rem; margin-top: 1.3rem; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #ddd; padding: .4rem .55rem; text-align: left; vertical-align: top; font-size: .93rem; }
+  th { background: #f6f6f6; }
+  code, pre { background: #f4f4f4; border-radius: 3px; font-size: .9em; }
+  code { padding: .1rem .3rem; }
+  pre { padding: .6rem .8rem; overflow-x: auto; }
+  .ok { color: #0a6b2d; font-weight: 700; }
+  .warn { color: #8a5a00; font-weight: 700; }
+  .quiet { color: #666; font-size: .92rem; }
+  li { margin: .25rem 0; }
+  @media (max-width: 640px) { table { display: block; overflow-x: auto; } }
+</style>
+</head>
+<body>
+<h1>UAT setup &mdash; 2026-10-27</h1>
+<p class="quiet">Release <code>d6266c91a</code>, tag <code>release/2026-10-27-d6266c91a</code>. Two bundles are on qsd, built from the same commit:</p>
+<ul class="quiet">
+  <li><b><code>Deployment_2026_10_27_d6266c91a.zip</code></b> &mdash; changes only since <code>Deployment_2026_10_22_9572643d8</code>, the release you run now. Use it if UAT already runs <code>9572643d8</code>.</li>
+  <li><b><code>Deployment_2026_10_27_d6266c91a_FULL.zip</code></b> &mdash; every file. Use it for a <b>new</b> UAT.</li>
+</ul>
+<p class="quiet">Each zip has a <code>MANIFEST.txt</code> naming the commit and every file. The changes-only zip also has a <code>DELETED.txt</code> listing files to remove. This release supersedes the undeployed <code>fd52807cb</code> bundle, so do not apply that.</p>
+
+<h2>1 · Before you start: what only your UAT can supply</h2>
+<p>The UAT values file <code>k8s/querystudioapi-helm/env/uat.yaml</code> holds everything QueryStudio already knows about UAT: its namespace, registry, hostnames, row security and Spark Connect. Nine values can only come from you. They are marked <code>__SET_PER_ENV__</code>, and <b>the charts refuse to render while any marker is left</b>, so nothing can start half-configured.</p>
+<ol>
+  <li>Copy <code>env/example.site.yaml</code> to <code>env/uat.site.yaml</code>. That file is ignored by git, so never commit it.</li>
+  <li>Fill in UAT's own directory. Use the UAT groups, never the PROD ones:
+<pre>querystudio:
+  auth:
+    type: ad                      # or: local
+    ad_server: "ldaps://&lt;UAT AD server&gt;:636"
+    ad_domain: "&lt;DOMAIN&gt;"
+    ad_base_dn: "DC=...,DC=..."
+    ad_service_account: "&lt;service account&gt;"
+    ad_admin_groups:   "CN=&lt;UAT admins group&gt;,OU=...,DC=..."
+    ad_analyst_groups: "CN=&lt;UAT analysts group&gt;,OU=...,DC=..."
+    ad_viewer_groups:  "CN=&lt;UAT viewers group&gt;,OU=...,DC=..."</pre></li>
+  <li><b>The master key.</b> Read it once from Vault and give the same value to <b>all five</b> deployments (api, scheduler, executor, reports, published-api) as <code>QUERY_STUDIO_SECRET_KEY</code>.
+    <ul>
+      <li>For an existing UAT, it must be the key that UAT has always used. A different key cannot read the saved connection passwords.</li>
+      <li>For a new UAT, create one key and keep it in Vault.</li>
+    </ul>
+<pre>oc create secret generic qs-master-key --from-literal=QUERY_STUDIO_SECRET_KEY="$KEY_FROM_VAULT"
+for d in &lt;api&gt; &lt;scheduler&gt; &lt;executor&gt; &lt;reports&gt; &lt;published-api&gt;; do
+  oc set env deploy/$d --from=secret/qs-master-key
+done</pre></li>
+  <li><b>The environment name</b> is already <code>uat</code> in both places in <code>uat.yaml</code>; leave it as it is. If it were blank, the feed SLA watcher would stop and say so, because a UAT alert must never reach Netcool labelled PROD.</li>
+  <li><b>Only if UAT users will run feeds on Spark pods</b> (Spark Connect is already set): add to <code>uat.site.yaml</code>
+<pre>querystudio:
+  spark_k8s:
+    enabled: true
+    callback_base_url: "http://querystudio-api.&lt;UAT app namespace&gt;.svc:8000"
+  feed_generation:
+    webhook_secret: "&lt;a random secret&gt;"</pre>
+    Without these, feeds run on the built-in engine (Native). That works for every feed; it is just slower for very large ones (see §4).</li>
+</ol>
+
+<h2>2 · Install or upgrade</h2>
+<h3>A new UAT</h3>
+<ol>
+  <li>Unzip <code>Deployment_2026_10_27_d6266c91a_FULL.zip</code>.</li>
+  <li>Build the images:
+    <ul>
+      <li><code>backend/</code> &rarr; the API image, also used by the scheduler, executor, reports and published API;</li>
+      <li><code>frontend/</code> &rarr; the UI image;</li>
+      <li><code>spark/</code> &rarr; the Spark job image, only if you use Spark pods.</li>
+    </ul></li>
+  <li>Create the empty PostgreSQL database named in <code>uat.yaml</code> (<code>querystudio</code> on <code>postgresqlnew</code>). <b>QueryStudio creates every table itself on first start.</b> There is no SQL script to run.</li>
+  <li><code>cd k8s/querystudioapi-helm &amp;&amp; ./deploy.sh uat</code>. It applies <code>env/uat.yaml</code>, then your <code>env/uat.site.yaml</code>, to every chart.</li>
+</ol>
+<h3>An existing UAT on 9572643d8</h3>
+<ol>
+  <li>Unzip <code>Deployment_2026_10_27_d6266c91a.zip</code> over the source tree you built <code>9572643d8</code> from.</li>
+  <li>Delete the paths listed in <code>DELETED.txt</code>.</li>
+  <li>Rebuild the images for the folders listed in <code>MANIFEST.txt</code>, then run <code>./deploy.sh uat</code>.</li>
+  <li><b>Database:</b> this release adds 8 tables and about 116 columns. <b>They are added on the first start</b>; no existing column changes type. The tables are: value lists (2), data entitlement (4), Netcool rules, and the SQL each feed run sent.</li>
+</ol>
+
+<h2>3 · Check it is up (10 minutes, before users arrive)</h2>
+<ol>
+  <li><b>Configuration:</b> <code>python scripts/verify_prod_config.py --profile uat --base-url https://&lt;UAT API&gt; --site-file k8s/querystudioapi-helm/env/uat.site.yaml</code>. It only reads. It says whether each pod loaded the file this release expects.</li>
+  <li><b>Pod logs:</b> none says <code>WAITING for the key</code>, <code>MASTER KEY MISMATCH</code> or <code>__SET_PER_ENV__</code>.</li>
+  <li><b>Sign in</b> as a member of each AD group:
+    <ul>
+      <li>an admin sees <b>Admin</b>;</li>
+      <li>an analyst can build reports;</li>
+      <li>a viewer can only open them.</li>
+    </ul></li>
+  <li><b>Admin &rarr; Monitoring &rarr; Component Health</b>: every pod and every connection is green. A connection's <b>Test</b> button succeeds.</li>
+  <li><b>One feed:</b> Run Now on a small feed. It delivers, and its run shows each step with a time.</li>
+</ol>
+
+<h2>4 · What is new for UAT users (since 9572643d8)</h2>
+<table>
+<tr><th>Area</th><th>What users will see</th></tr>
+<tr><td>Feeds list</td><td>
+  <ul>
+    <li><b>Grouped</b> by feed group, template, schedule or any template value. For example, every FX-AMER feed sits under one heading, with Open all / Close all.</li>
+    <li>The <b>Schedule</b> column says the schedule in words ("Month end", "Every working day"). It used to say "Off".</li>
+    <li>Switched-off feeds are hidden until you ask for them.</li>
+  </ul></td></tr>
+<tr><td>Feed form</td><td>
+  <ul>
+    <li>It opens in the <b>same window as the Download Center's preview</b>. You can move it by its title bar, resize it from the corner, maximize it, and minimize it to its title. It closes only with its Close button, so a stray click or Escape never loses your work. The steps are listed down the left side.</li>
+    <li>"Extra filters (optional)" replaces "WHERE Clauses".</li>
+    <li>The <b>Review</b> step says which engine will run the feed (Native or Spark) and why.</li>
+    <li>A path that starts or ends with a space is refused, with the reason.</li>
+  </ul></td></tr>
+<tr><td>Which engine runs a feed</td><td>
+  <ul>
+    <li>A big or <b>wide</b> run goes to Spark by itself. The row count is checked on the source first, and 600 columns count as six times the rows of 100. Anything else runs on Native.</li>
+    <li>An engine that UAT has not switched on is not offered. Airflow, for example, no longer appears where it cannot run.</li>
+  </ul></td></tr>
+<tr><td>Cancelling a feed</td><td>Cancel now <b>also stops the query at the source</b>: Starburst/Trino, Snowflake, Oracle, Databricks and DuckDB. It also stops an upload that is in progress. The run then shows what was stopped: "Stopped at the source: Trino / Starburst query &lt;id&gt;".</td></tr>
+<tr><td>A run that keeps failing</td><td>If the pod running a feed is killed (for example, out of memory), the run is tried <b>once</b> more. If that is killed too, the run fails, and the message says why and what to change. It used to restart again and again.</td></tr>
+<tr><td>Memory</td><td>A pod takes only as many feed runs as its memory can hold. Wide runs are weighed by their width. A wide run used to be able to take the scheduler down.</td></tr>
+<tr><td>AWS S3 through a VPC endpoint</td><td>
+  <ul>
+    <li>Feeds read with the connection's credentials, as the query builder always did; they used to read with none.</li>
+    <li>An S3 error now starts with what S3 answered ("S3 answered HTTP 403 (AccessDenied) ...").</li>
+    <li>A region the connection does not use is no longer reported.</li>
+  </ul></td></tr>
+<tr><td>Reports</td><td>
+  <ul>
+    <li>Canvas reports export to Excel (one sheet with real charts) and PDF, laid out as on the screen.</li>
+    <li>They also work on share links, embeds and dashboard tiles.</li>
+    <li>Parameter choices are smarter and come from the source table, another table or a saved value list.</li>
+    <li>There is no row limit by default.</li>
+  </ul></td></tr>
+<tr><td>Data entitlement</td><td>Who can see which values can be set per group or user, by column. It is <b>off</b> until an admin turns it on. A report says when entitlement limits what it shows.</td></tr>
+<tr><td>Published APIs</td><td>An API can combine data from two sources in one answer. Row security is applied last on every source.</td></tr>
+</table>
+
+<h3>Very wide feeds on Spark (fixed in this release)</h3>
+<p>A feed of about <b>600 columns</b>, pinned to <b>Spark</b> and split by a partition column, used to run out of memory on small Spark pods. The memory each pod is given outside Java's heap was too small for that width, and the driver had too little room to send the file.</p>
+<p>The cause was measured inside the pods, and the sizing rule now follows those measurements. The same 2-million-row, 600-column feed then delivered correctly on the test rig's small pods. The file was byte-for-byte the same as the one the built-in engine produced, and no pod ran out of memory.</p>
+<p>With the default Spark pod sizes, which UAT uses unless you change them, nothing changes.</p>
+
+<h2>5 · How it was proven</h2>
+<p>Everything below ran on the commit in both bundles.</p>
+<table>
+<tr><th>Check</th><th>Result</th></tr>
+<tr><td>Full test rig, rebuilt from empty, every test group in one sequence</td><td><span class="ok">48 of 49 passed</span>. The one failure was the test itself, not QueryStudio: its extra API copies were missing a folder. After that was fixed, the whole security group passed <span class="ok">6 of 6</span> (encryption keys 24 of 24 checks, twice).</td></tr>
+<tr><td>Backend tests, run the way CI runs them (Python 3.11, no network)</td><td><span class="ok">39,542 passed, 0 failed</span></td></tr>
+<tr><td>Screen tests and type check</td><td><span class="ok">2,577 of 2,577 passed</span>; type check clean</td></tr>
+<tr><td>The feed form's new window, by clicks in a real browser</td><td><span class="ok">Passed</span>. It stays open on a stray click or Escape, it can be moved, resized, maximized and minimized, and lists open above it. The Download Center preview is the same window.</td></tr>
+<tr><td>2,000,000 rows &times; 600 columns on Spark, split by date, small pods</td><td><span class="ok">Delivered</span>: 2,000,000 rows, totals match the source, 10,748,067,540 bytes, the same as the built-in engine; no pod ran out of memory.</td></tr>
+</table>
+<p class="quiet">Every change has its reasoning in the commit history (<code>git log 9572643d8..d6266c91a</code>).</p>
+</body>
+</html>

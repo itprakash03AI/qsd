@@ -1,0 +1,7 @@
+Deployment_2026_10_27_d6266c91a_FULL: 1 parts, each under 24 MB.
+Extract EVERY part into the SAME folder; together they are the whole bundle.
+
+Deployment_2026_10_27_d6266c91a_FULL.zip  11.8 MB  1702 files  sha256 9eddec583217533076aec9e2aee88877c5fe3fbae8104673136aa10e2f7f50d1
+    contains: .dockerignore, Dockerfile.api, Dockerfile.published-api, Dockerfile.reports, Dockerfile.ui, MANIFEST.txt, backend, clockwork, duckdb_extensions, frontend, k8s, scripts, spark
+
+1702 files in all
