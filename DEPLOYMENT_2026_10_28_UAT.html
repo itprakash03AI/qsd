@@ -32,6 +32,8 @@
 </ul>
 <p class="quiet">Each zip has a <code>MANIFEST.txt</code> naming the commit and every file. The changes-only zip also has a <code>DELETED.txt</code> listing files to remove. Zips over 24 MB are split into parts; the <code>.PARTS.txt</code> file next to them says how to join them. This release <b>replaces</b> the undeployed <code>d6266c91a</code> bundle and includes everything in it, so do not apply that one.</p>
 
+<p><b>Also apply <code>Hotfix_2026_10_28_snowflake_account.zip</code></b> (3 files) by unzipping it over the tree <b>after</b> either bundle and before you build the images. It lets a Snowflake connection's Account field take the full address, for example <code>https://claude-dev_test_aws_eau.privatelink.claude.com</code>. Without it the connection test fails with "invalid character ':' in account identifier". Files: <code>backend/core/connectors/snowflake_connector.py</code>, <code>backend/core/spark_k8s/jdbc.py</code>, <code>frontend/src/components/ConnectionManager.tsx</code>. These were tested with 19 new tests plus the 144 existing Snowflake tests, and with the real Snowflake driver, but not in the full release check.</p>
+
 <h2>1 · Before you start: what only your UAT can supply</h2>
 <p>Nothing new since the 2026-10-27 guide. The UAT values file <code>k8s/querystudioapi-helm/env/uat.yaml</code> holds what QueryStudio knows about UAT; the values only you can give are marked <code>__SET_PER_ENV__</code>, and <b>the charts refuse to render while any marker is left</b>.</p>
 <ol>

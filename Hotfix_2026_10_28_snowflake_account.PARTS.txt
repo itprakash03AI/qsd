@@ -1,0 +1,7 @@
+Hotfix_2026_10_28_snowflake_account: 1 parts, each under 24 MB.
+Extract EVERY part into the SAME folder; together they are the whole bundle.
+
+Hotfix_2026_10_28_snowflake_account.zip  0.1 MB  5 files  sha256 76e60bb1ee043dbdc7058d1024794f176f7b4eb13ccccf5624be574266e88505
+    contains: DELETED.txt, MANIFEST.txt, backend, frontend
+
+5 files in all
