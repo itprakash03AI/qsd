@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UAT Update 2026-10-29</title>
+<style>
+  body { font-family: "Segoe UI", system-ui, sans-serif; line-height: 1.55; max-width: 1000px;
+         margin: 2rem auto; padding: 0 1rem; color: #1d1d1f; background: #fff; }
+  h1 { font-size: 1.7rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.2rem; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #ddd; padding: .4rem .55rem; text-align: left; vertical-align: top; font-size: .93rem; }
+  th { background: #f6f6f6; }
+  code, pre { background: #f4f4f4; border-radius: 3px; font-size: .9em; }
+  code { padding: .1rem .3rem; }
+  pre { padding: .6rem .8rem; overflow-x: auto; }
+  .ok { color: #0a6b2d; font-weight: 700; }
+  .warn { color: #8a5a00; font-weight: 700; }
+  .quiet { color: #666; font-size: .92rem; }
+  li { margin: .25rem 0; }
+  @media (max-width: 640px) { table { display: block; overflow-x: auto; } }
+</style>
+</head>
+<body>
+<h1>UAT update &mdash; 2026-10-29</h1>
+<p class="quiet">Release <code>d7e31dae6</code>, tag <code>release/2026-10-29-d7e31dae6</code>. A small update on top of last night's release <code>b012dcc99</code>.</p>
+
+<h2>1 · Which zip</h2>
+<ul>
+  <li><b>UAT runs <code>b012dcc99</code></b> (last night's package, with or without the Snowflake hotfix): unzip <b><code>Deployment_2026_10_29_d7e31dae6.zip</code></b> over that source tree. It has 15 files and nothing to delete. It already includes the Snowflake hotfix.</li>
+  <li><b>UAT still runs <code>9572643d8</code></b> (last night's package not deployed): unzip <code>Deployment_2026_10_28_b012dcc99.zip</code> first, then this one.</li>
+</ul>
+<p>Then rebuild the API image and the UI image and run <code>./deploy.sh uat</code>. There are no new Python packages and nothing to configure. One database column, <code>execution_checkpoints.heartbeat_at</code>, is added by itself on the first start.</p>
+
+<h2>2 · What changes for users</h2>
+<table>
+<tr><th>Area</th><th>What users will see</th></tr>
+<tr><td>A report whose server restarts</td><td>If the server running a report restarts (a deployment, a pod restart, out of memory), the report now says within about 2&frac12; minutes: <i>"The server running this query restarted or stopped ... press Run again"</i>, with a <b>Run again</b> button. Before, it looked stuck for up to 2&frac12; hours, or said "Cancelled by user" after a deployment.</td></tr>
+<tr><td>Snowflake account</td><td>The Account field takes the full address, for example <code>https://claude-dev_test_aws_eau.privatelink.claude.com</code>, or the address without <code>https://</code>. QueryStudio connects to that PrivateLink address and uses <code>claude-dev_test_aws_eau</code> as the account.</td></tr>
+<tr><td>Athena</td><td>The connection test says whether the Athena workgroup limits how much a query may scan (the only limit Athena enforces). Queries no longer send a statement Athena refuses before every query.</td></tr>
+<tr><td>Typed SQL on on-prem S3</td><td>A path like <code>'s3://bucket/table/...'</code> typed into SQL on an on-prem connection now gets a clear answer: <i>"... is the registered table trades -- write FROM trades"</i>. Before, it said "AWS access denied ... credentials expired", which was wrong. A query that names no table at all (<code>select 41 + 1</code>) now runs; before, it tried to read every table and was refused.</td></tr>
+</table>
+
+<h2>3 · Check after deploying (5 minutes)</h2>
+<ol>
+  <li>Component Health is green.</li>
+  <li>The API pod log has <code>Checkpoint heartbeat started (every 30s; a run silent 150s is failed)</code>.</li>
+  <li>Your Snowflake connection, with the full address in Account: <b>Test</b> passes.</li>
+  <li>A small report runs as before.</li>
+</ol>
+
+<h2>4 · How it was proven</h2>
+<table>
+<tr><th>Check</th><th>Result</th></tr>
+<tr><td><b>Release check from an EMPTY rig</b> (one sequence, every group)</td><td class="ok">54 of 54 proofs passed, 1,266 checks, 0 failed</td></tr>
+<tr><td>Sign-in, row security, data entitlement, Vault system accounts through the AWS portal, keys</td><td class="ok">7 of 7 passed (118 checks, 4 min)</td></tr>
+<tr><td>Datasets from a role, from S3 SQL, date value lists</td><td class="ok">3 of 3 passed (32 checks, 0 min)</td></tr>
+<tr><td>Publishing reports, value lists, edge cases</td><td class="ok">3 of 3 passed (65 checks, 0 min)</td></tr>
+<tr><td>Published APIs: date filters, paging limits, the inventory (values compared with what was sent)</td><td class="ok">3 of 3 passed (110 checks, 3 min)</td></tr>
+<tr><td>Feed triggers, dependencies, on-completion, checksums, month end, the board, feeds from SQL, control files, Kafka message table, Excel onboarding</td><td class="ok">12 of 12 passed (259 checks, 47 min)</td></tr>
+<tr><td>Background jobs, jobs by output, component health, a report whose server restarts or is killed (Run again)</td><td class="ok">4 of 4 passed (193 checks, 23 min)</td></tr>
+<tr><td>Configuration release UAT to PROD, schema upgrade</td><td class="ok">2 of 2 passed (64 checks, 2 min)</td></tr>
+<tr><td>Many users at once, waiting for capacity</td><td class="ok">2 of 2 passed (15 checks, 8 min)</td></tr>
+<tr><td>Spark pods, partitioned Spark feeds, run progress</td><td class="ok">3 of 3 passed (58 checks, 14 min)</td></tr>
+<tr><td>Spark read plans (Iceberg merge-on-read, Hive)</td><td class="ok">2 of 2 passed (17 checks, 5 min)</td></tr>
+<tr><td>Starburst-like engine, second-side bindings, partition-by-key reads</td><td class="ok">3 of 3 passed (93 checks, 49 min)</td></tr>
+<tr><td>Real AWS S3: fact_tetb, cross-source, pruning, worst queries, background, S3 to S3, a new feed end to end, restatement, your shared query as 520 feeds, Athena on real AWS equal to S3 direct</td><td class="ok">10 of 10 passed (242 checks, 128 min)</td></tr>
+</table>
+<p class="quiet">The reasoning for every change is in the commit history (<code>git log b012dcc99..d7e31dae6</code>).</p>
+</body>
+</html>
