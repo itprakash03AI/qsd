@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UAT Setup 2026-10-28</title>
+<style>
+  body { font-family: "Segoe UI", system-ui, sans-serif; line-height: 1.55; max-width: 1000px;
+         margin: 2rem auto; padding: 0 1rem; color: #1d1d1f; background: #fff; }
+  h1 { font-size: 1.7rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.2rem; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
+  h3 { font-size: 1.02rem; margin-top: 1.3rem; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #ddd; padding: .4rem .55rem; text-align: left; vertical-align: top; font-size: .93rem; }
+  th { background: #f6f6f6; }
+  code, pre { background: #f4f4f4; border-radius: 3px; font-size: .9em; }
+  code { padding: .1rem .3rem; }
+  pre { padding: .6rem .8rem; overflow-x: auto; }
+  .ok { color: #0a6b2d; font-weight: 700; }
+  .warn { color: #8a5a00; font-weight: 700; }
+  .quiet { color: #666; font-size: .92rem; }
+  li { margin: .25rem 0; }
+  @media (max-width: 640px) { table { display: block; overflow-x: auto; } }
+</style>
+</head>
+<body>
+<h1>UAT setup &mdash; 2026-10-28</h1>
+<p class="quiet">Release <code>b012dcc99</code>, tag <code>release/2026-10-28-b012dcc99</code>. Two bundles are on qsd, built from the same commit:</p>
+<ul class="quiet">
+  <li><b><code>Deployment_2026_10_28_b012dcc99.zip</code></b> &mdash; changes only since <code>Deployment_2026_10_22_9572643d8</code>, the release UAT runs now. Use it if UAT already runs <code>9572643d8</code>.</li>
+  <li><b><code>Deployment_2026_10_28_b012dcc99_FULL.zip</code></b> &mdash; every file. Use it for a <b>new</b> UAT.</li>
+</ul>
+<p class="quiet">Each zip has a <code>MANIFEST.txt</code> naming the commit and every file. The changes-only zip also has a <code>DELETED.txt</code> listing files to remove. Zips over 24 MB are split into parts; the <code>.PARTS.txt</code> file next to them says how to join them. This release <b>replaces</b> the undeployed <code>d6266c91a</code> bundle and includes everything in it, so do not apply that one.</p>
+
+<h2>1 · Before you start: what only your UAT can supply</h2>
+<p>Nothing new since the 2026-10-27 guide. The UAT values file <code>k8s/querystudioapi-helm/env/uat.yaml</code> holds what QueryStudio knows about UAT; the values only you can give are marked <code>__SET_PER_ENV__</code>, and <b>the charts refuse to render while any marker is left</b>.</p>
+<ol>
+  <li>Copy <code>env/example.site.yaml</code> to <code>env/uat.site.yaml</code> (ignored by git, never commit it) and fill in UAT's own AD server, domain, service account and the three UAT groups (admins, analysts, viewers).</li>
+  <li><b>The master key:</b> the same value from Vault into <b>all five</b> deployments (api, scheduler, executor, reports, published-api) as <code>QUERY_STUDIO_SECRET_KEY</code>. For an existing UAT it must be the key UAT has always used.
+<pre>oc create secret generic qs-master-key --from-literal=QUERY_STUDIO_SECRET_KEY="$KEY_FROM_VAULT"
+for d in &lt;api&gt; &lt;scheduler&gt; &lt;executor&gt; &lt;reports&gt; &lt;published-api&gt;; do
+  oc set env deploy/$d --from=secret/qs-master-key
+done</pre></li>
+  <li>The environment name stays <code>uat</code> in <code>uat.yaml</code>.</li>
+  <li>Spark pods only if UAT users will use them: <code>spark_k8s.enabled</code>, <code>callback_base_url</code> and <code>feed_generation.webhook_secret</code> in <code>uat.site.yaml</code>, as in the 10-27 guide.</li>
+</ol>
+
+<h2>2 · Install or upgrade</h2>
+<h3>A new UAT</h3>
+<ol>
+  <li>Unzip <code>Deployment_2026_10_28_b012dcc99_FULL.zip</code>.</li>
+  <li>Build the images: <code>backend/</code> &rarr; the API image (also scheduler, executor, reports, published API); <code>frontend/</code> &rarr; the UI image; <code>spark/</code> &rarr; the Spark job image, only if you use Spark pods.</li>
+  <li>Create the empty PostgreSQL database named in <code>uat.yaml</code>. <b>QueryStudio creates every table itself on first start</b>, including <code>qs_kafka_message</code>. There is no SQL script to run.</li>
+  <li><code>cd k8s/querystudioapi-helm &amp;&amp; ./deploy.sh uat</code>.</li>
+</ol>
+<h3>An existing UAT on 9572643d8</h3>
+<ol>
+  <li>Unzip <code>Deployment_2026_10_28_b012dcc99.zip</code> over the source tree you built <code>9572643d8</code> from.</li>
+  <li>Delete the paths listed in <code>DELETED.txt</code>.</li>
+  <li><b>Rebuild the API image</b>: it has one new Python package, <code>defusedxml==0.7.1</code> (already in <code>backend/requirements.txt</code>; it lets the Excel upload read files safely). Rebuild the UI image too. Then <code>./deploy.sh uat</code>.</li>
+  <li><b>Database:</b> new tables and columns are <b>added on the first start</b>; no existing column changes type. Since 9572643d8 that is the 8 tables of the 10-27 release plus <code>qs_kafka_message</code>.</li>
+</ol>
+
+<h2>3 · Check it is up (10 minutes, before users arrive)</h2>
+<ol>
+  <li><code>python scripts/verify_prod_config.py --profile uat --base-url https://&lt;UAT API&gt; --site-file k8s/querystudioapi-helm/env/uat.site.yaml</code> (read only).</li>
+  <li>No pod log says <code>WAITING for the key</code>, <code>MASTER KEY MISMATCH</code> or <code>__SET_PER_ENV__</code>.</li>
+  <li>Sign in as an admin, an analyst and a viewer: each sees what their group allows.</li>
+  <li><b>Admin &rarr; Monitoring &rarr; Component Health</b>: every pod and connection green.</li>
+  <li><b>The table:</b> <code>SELECT count(*) FROM qs_kafka_message;</code> answers 0 (the table exists).</li>
+  <li><b>One feed:</b> Run Now on a small feed; it delivers and shows each step with a time.</li>
+</ol>
+
+<h2>4 · Your Kafka service writes into <code>qs_kafka_message</code></h2>
+<p>Your existing Kafka service inserts one row per upstream message straight into QueryStudio's PostgreSQL. QueryStudio runs <b>no Kafka consumer</b> for it and needs <b>no Oracle connection</b>. The columns are the OG <code>QS_KAFKA_MESSAGE</code> columns (PostgreSQL shows them in lower case; <code>"order"</code> must be quoted, as in Oracle):</p>
+<table>
+<tr><th>Column</th><th>Type</th><th>Fill it?</th></tr>
+<tr><td><code>id</code></td><td>bigint</td><td>Leave it out: the database numbers the row. If you do send it, it must only ever increase.</td></tr>
+<tr><td><code>data_store</code>, <code>data_source</code>, <code>source_system_name</code>, <code>source_system_instance</code></td><td>text</td><td>Yes</td></tr>
+<tr><td><code>business_date</code></td><td>date</td><td>Yes</td></tr>
+<tr><td><code>code</code>, <code>business_event</code>, <code>cloud_compliant</code>, <code>"order"</code>, <code>snap_version</code>, <code>version_number</code></td><td>text</td><td>Yes</td></tr>
+<tr><td><code>version</code>, <code>row_count</code></td><td>number</td><td>Yes</td></tr>
+<tr><td><code>catalogue_registration_time</code>, <code>version_state</code></td><td>text</td><td>Yes</td></tr>
+<tr><td><code>processed</code></td><td>text</td><td>Yes (as OG: <code>N</code>)</td></tr>
+<tr><td><code>created_at</code>, <code>data_load_status</code></td><td>time, text</td><td>Leave out: filled by the database (now, <code>PENDING</code>)</td></tr>
+<tr><td><code>fk_dependency_id</code></td><td>number</td><td>Optional</td></tr>
+</table>
+<pre>INSERT INTO qs_kafka_message (data_store, data_source, source_system_name, source_system_instance,
+  business_date, code, business_event, cloud_compliant, "order", snap_version, version_number,
+  version, catalogue_registration_time, version_state, row_count, processed)
+VALUES ('QS', 'GB01', 'WS_STORE', 'uat', DATE '2026-10-31', 'SAP-2504', 'EOM', 'false', 'NA',
+  '1', '1', 1, '2026-10-31T05:00:00', 'COMPLETE', 125000, 'N');</pre>
+<p><b>What QueryStudio does with a row.</b> The QueryStudio worker on the scheduler pod reads new rows every 15 seconds and never changes them. A row releases the feeds waiting on the dependency named the OG way, <code>&lt;DATA_SOURCE&gt;_&lt;CODE&gt;_&lt;BUSINESS_EVENT&gt;_&lt;CLOUD|ONPREM&gt;</code> (<code>cloud_compliant</code> true &rarr; CLOUD, false &rarr; ONPREM), for that business date. Only <code>version_state = COMPLETE</code> releases a feed, and the feed's rows are checked against <code>row_count</code>. A row nothing waits for is kept and shown as not matched in <b>Feeds &rarr; Dependency Messages</b>. Nothing to configure in UAT: this is the default.</p>
+<p class="quiet">The database user your Kafka service uses needs only <code>INSERT</code> (and <code>USAGE</code> on the id sequence) on this one table.</p>
+
+<h2>5 · What is new for UAT users (since 9572643d8)</h2>
+<p class="quiet">Everything in the 2026-10-27 guide, &sect;4 (grouped feeds list, the feed form window, engine choice, cancel at the source, memory, S3 through a VPC endpoint, canvas reports, data entitlement, published APIs), plus:</p>
+<table>
+<tr><th>Area</th><th>What users will see</th></tr>
+<tr><td>4,000 feeds from one Excel file</td><td>
+  <ul>
+    <li>Feeds &rarr; <b>Bulk feeds from a template</b> &rarr; <b>Download Excel template</b>: a sheet whose columns are the template's values (for example <code>SYSTEM_ENTITY</code>, <code>EventCode</code>), with one example row and a "How to fill" sheet.</li>
+    <li>Fill one row per feed and <b>Upload Excel / CSV</b>. Every problem is listed by row ("Row 3: 'EventCode' is empty.", "Row 5 is the same feed as row 2."), and Plan and Apply stay off until the file is clean.</li>
+    <li><b>Plan</b> shows what would be created and writes nothing; <b>Apply</b> creates them. Each feed gets its own WHERE value and its own Kafka dependency. Uploading the same file again changes nothing.</li>
+    <li>Limits: 20,000 rows, 10 MB, 200 columns, 1,000 characters a cell.</li>
+  </ul></td></tr>
+<tr><td>The screen fits the monitor</td><td>Text, controls and spacing grow with the screen width: as before on a laptop, about 12% larger on a 1920-wide screen, about 30% larger on 2560. Menus still open under their field and windows stay inside the screen.</td></tr>
+<tr><td>Feed board (<code>/feeds/today</code>)</td><td>Calmer: fewer colours, larger text, the status tiles filled with their colour, and no "waits for nothing" (it now says "No upstream data needed"). Every popup on the board is the same floating window as the feed form.</td></tr>
+<tr><td>Engine names</td><td>The built-in engine is shown as <b>QueryStudio worker</b>, the way Airflow names its workers.</td></tr>
+<tr><td>Feed groups</td><td>A feed simply names its group; the group is created the first time a feed names it. Nothing to set up first. Bringing back a switched-off group is admin-only and recorded.</td></tr>
+<tr><td>Sample reports</td><td>Samples are real reports that an admin marks as a sample, on real tables and queries. The seeded demo samples are gone.</td></tr>
+<tr><td>Enterprise P&amp;L and Position Reporting</td><td>The banner and its extra details are hidden.</td></tr>
+<tr><td>Very wide feeds on the QueryStudio worker</td><td>A feed of about 460 columns no longer fails with "Out of Memory Error: failed to pin block" on a pod with little DuckDB memory. It now runs on fewer threads and, only if it must, with a little more memory (about 1.4 MB a column), which is the rule the other engines already used.</td></tr>
+</table>
+
+<h3>Also new in this release (fixed 2026-10-28)</h3>
+<table>
+<tr><th>Area</th><th>What users will see</th></tr>
+<tr><td>Editing a Vault system account</td><td>Opening a saved Vault system account now shows its Vault addresses and says the role id is saved. Before, every field was blank and saving again could wipe them.</td></tr>
+<tr><td>S3 through the AWS portal with a Vault system account</td><td>On an S3 connection that logs in through the AWS portal, you can pick a <b>system account</b> (from Vault, or with its own saved password) instead of a personal login. On <b>Admin &rarr; AWS Portal</b> you can pick the system account the portal uses for everyone.</td></tr>
+<tr><td>Admin &rarr; AWS Portal test</td><td>The test now uses the same proxy and address rules as a connection, so "failed to resolve" no longer appears on the admin page while the connection works. It names which step failed: step 1 is the login, step 2 the AWS keys.</td></tr>
+<tr><td>Published API paging</td><td><code>next_page_url</code> now keeps your filters and parameters, so following it gives the next page of <b>the same</b> question. A parameter can take several values (<code>?entity=GB01&amp;entity=GB02</code>, or comma-separated). The Published APIs page has a <b>How to call</b> tab with copy-ready examples: first page, next page, a full loop that handles busy and too-many-rows answers, filters, formats and bulk.</td></tr>
+<tr><td>BQB on S3 with typed SQL</td><td>A query typed straight against an S3 connection, with no registered table, no longer fails with an internal error.</td></tr>
+</table>
+
+<h3 class="warn">One change to check before you upgrade: Admin &rarr; AWS Portal values only count when Enabled is on</h3>
+<p>The portal address, proxy, role and account set on <b>Admin &rarr; AWS Portal</b> are now used <b>only while that page's Enabled switch is on</b>. Before, they leaked into every AWS connection even with Enabled off. That broke connections that had their own settings, which is what happened on UAT. A connection that has its own portal settings is not affected. A connection that left those fields empty and <b>relied on the Admin page</b> now needs <b>Enabled</b> switched on there. The SSL check and the time-out always follow the Admin page.</p>
+
+<h3>Users asked for their password on an S3 connection</h3>
+<p>If a connection was saved with one person's own login, everyone else is asked for theirs. For a connection everyone should use through a <b>Vault system account</b>, an admin opens the connection and sets <b>Credential source = System account</b>. Then no user is asked for a password.</p>
+
+<h2>6 · How it was proven</h2>
+<p>Everything below ran on the commit in both bundles.</p>
+<table>
+<tr><th>Check</th><th>Result</th></tr>
+<tr><td><b>Release check from an EMPTY rig</b> (one sequence, every group)</td><td class="ok">52 of 52 proofs passed, 1,250 checks, 0 failed</td></tr>
+<tr><td>Sign-in, row security, data entitlement, Vault system accounts through the AWS portal, keys</td><td class="ok">7 of 7 passed (118 checks, 4 min)</td></tr>
+<tr><td>Datasets from a role, from S3 SQL, date value lists</td><td class="ok">3 of 3 passed (32 checks, 0 min)</td></tr>
+<tr><td>Publishing reports, value lists, edge cases</td><td class="ok">3 of 3 passed (65 checks, 0 min)</td></tr>
+<tr><td>Published APIs: date filters, paging limits, the inventory (values compared with what was sent)</td><td class="ok">3 of 3 passed (110 checks, 3 min)</td></tr>
+<tr><td>Feed triggers, dependencies, on-completion, checksums, month end, the board, feeds from SQL, control files, Kafka message table, Excel onboarding</td><td class="ok">12 of 12 passed (259 checks, 47 min)</td></tr>
+<tr><td>Background jobs, jobs by output, component health</td><td class="ok">3 of 3 passed (187 checks, 20 min)</td></tr>
+<tr><td>Configuration release UAT to PROD, schema upgrade</td><td class="ok">2 of 2 passed (64 checks, 2 min)</td></tr>
+<tr><td>Many users at once, waiting for capacity</td><td class="ok">2 of 2 passed (15 checks, 8 min)</td></tr>
+<tr><td>Spark pods, partitioned Spark feeds, run progress</td><td class="ok">3 of 3 passed (58 checks, 13 min)</td></tr>
+<tr><td>Spark read plans (Iceberg merge-on-read, Hive)</td><td class="ok">2 of 2 passed (17 checks, 5 min)</td></tr>
+<tr><td>Starburst-like engine, second-side bindings, partition-by-key reads</td><td class="ok">3 of 3 passed (93 checks, 56 min)</td></tr>
+<tr><td>Real AWS S3: fact_tetb, cross-source, pruning, worst queries, background, S3 to S3, a new feed end to end, restatement, your shared query as 520 feeds</td><td class="ok">9 of 9 passed (232 checks, 135 min)</td></tr>
+</table>
+<p class="quiet">Every change has its reasoning in the commit history (<code>git log 9572643d8..b012dcc99</code>).</p>
+</body>
+</html>
