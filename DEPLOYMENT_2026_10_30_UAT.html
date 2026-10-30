@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UAT Update 2026-10-30</title>
+<style>
+  body { font-family: "Segoe UI", system-ui, sans-serif; line-height: 1.55; max-width: 1000px;
+         margin: 2rem auto; padding: 0 1rem; color: #1d1d1f; background: #fff; }
+  h1 { font-size: 1.7rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.2rem; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #ddd; padding: .4rem .55rem; text-align: left; vertical-align: top; font-size: .93rem; }
+  th { background: #f6f6f6; }
+  code, pre { background: #f4f4f4; border-radius: 3px; font-size: .9em; }
+  code { padding: .1rem .3rem; }
+  .ok { color: #0a6b2d; font-weight: 700; }
+  .quiet { color: #666; font-size: .92rem; }
+  li { margin: .25rem 0; }
+  @media (max-width: 640px) { table { display: block; overflow-x: auto; } }
+</style>
+</head>
+<body>
+<h1>UAT update &mdash; reports, Vault logins and the report / download pods, 2026-10-30</h1>
+<p class="quiet">Release <code>4b8e9e479</code>, tag <code>release/2026-10-30-4b8e9e479</code>. A changes-only update on top of yesterday's <code>d7e31dae6</code>.</p>
+
+<h2>1 · Which zip</h2>
+<ul>
+  <li><b>UAT runs <code>d7e31dae6</code></b>: unzip <b><code>Deployment_2026_10_30_4b8e9e479.zip</code></b> over that source tree. It has 40 files (23 backend, 10 frontend, 6 Helm chart, 1 Spark job) and nothing to delete.</li>
+  <li><b>UAT still runs <code>b012dcc99</code></b>: unzip <code>Deployment_2026_10_29_d7e31dae6.zip</code> first, then this one.</li>
+</ul>
+<p>Then rebuild the API image, the UI image and the Spark job image (one file in <code>spark/jobs/</code> changed), and run <code>./deploy.sh uat</code> from <code>k8s/querystudioapi-helm/</code> (the charts changed: run the whole script, not one chart). There are no new Python packages and nothing to configure. One database column, <code>report_parameters.source_column</code>, is added by itself on the first start.</p>
+
+<h2>2 · What changes for users</h2>
+<table>
+<tr><th>Area</th><th>What users will see</th></tr>
+<tr><td>Filter at the source</td><td>A report on a dataset built from SQL now lists the fixed values in that SQL's WHERE clause (for example <code>SYSTEM_ID IN ('SAPADB', 'MOTIFADJ')</code> and <code>BUSINESS_CLOSE_DATE = '2025-09-30'</code>) under <b>Filter at the source</b>. Tick one and it becomes a question when the report runs: the chosen value goes into the query and runs on the source. One value runs as <code>=</code>, several as <code>IN (...)</code>. Left empty, the report runs exactly as the query is written (the viewer reads "As in the query: SAPADB, MOTIFADJ"). <b>Filter the results</b> still filters the rows that come back.</td></tr>
+<tr><td>Date questions</td><td>A date can be <b>any date</b> on a calendar, not only the dates found in the data. In the report editor, "Days the viewer may pick" chooses <i>Any date</i> or <i>Only dates that have data</i>. New date questions start as <i>Any date</i>.</td></tr>
+<tr><td>Column order</td><td>In the report builder, "Column order" numbers each column and has &#9650; / &#9660; buttons (dragging still works).</td></tr>
+<tr><td>Text columns that look like dates</td><td>A column the source says is text is no longer treated as a date because its name contains "date", "ts" or "settlement" (for example "Trade Comments"). Existing datasets keep their stored types until their columns are detected again (Datasets &rarr; Auto-detect).</td></tr>
+<tr><td>Connections page</td><td>Uses the full width of the screen; the new / edit form opens wider and scrolls less.</td></tr>
+<tr><td>Vault System Accounts</td><td>An account's username and password are one login. A connection that picks a System Account and has a typed username but no password now logs in as the <b>account's</b> user (before, it sent the typed name with the Vault password and Starburst answered HTTP 401). A connection with its own username <i>and</i> password still uses those. Kafka, the Oracle destination and the feed's <b>Test</b> button follow the same rule.</td></tr>
+<tr><td>SFTP logins from a System Account</td><td>The account has an <b>Allowed hosts</b> field. Its login is sent only to those SFTP servers; when an admin saves the account, QueryStudio reads each server's key and checks it on every login. A feed author who is not an admin can use the account only with those hosts; an admin can point a feed at a new host. SFTP destinations already saved and already sending the account's login keep working.</td></tr>
+<tr><td>Report and download pods now used</td><td>The reports pod and the downloads pod were installed by <code>deploy.sh</code> but the screen never called them: every report and every Download Centre request went to the main API pod. Now the screen sends report requests to <code>https://querystudio-reports-45646.np5-gl.apaas4.claude.intranet</code> and Download Centre requests to <code>https://querystudio-downloads-45646.np5-gl.apaas4.claude.intranet</code>; everything else still goes to the main API. Users see no difference except that report work no longer slows down queries on the main pod.</td></tr>
+<tr><td>Deleting a dataset</td><td>A dataset that reports are built on can no longer be deleted. The message names those reports; delete or move them first.</td></tr>
+<tr><td>Shared and embedded links</td><td>Offer only the values written in the query for a source question, and never show the query's SQL or table names.</td></tr>
+</table>
+
+<h2>3 · Check after deploying (5 minutes)</h2>
+<ol>
+  <li>Component Health is green.</li>
+  <li>Open a report built on your JOIN dataset: <b>Edit</b> &rarr; Filters step shows <b>Filter at the source</b> with <code>SYSTEM_ID</code> and <code>BUSINESS_CLOSE_DATE</code>.</li>
+  <li>Tick <code>BUSINESS_CLOSE_DATE</code>, save, open the report: the date is a calendar; run it for <code>2025-09-30</code> (the rows you had) and for a date with no data (no rows, no error).</li>
+  <li>The Connections page fills the screen.</li>
+  <li>A Starburst connection that uses a Vault System Account: <b>Test</b> connects.</li>
+  <li>One SFTP feed that delivers with a System Account: run it once, the file arrives. Then open <b>System Accounts</b>, fill <b>Allowed hosts</b> with that server and save.</li>
+  <li>Try to delete a dataset a report uses: it is refused and names the report.</li>
+  <li><b>The two pods answer</b> (do this first if a report or the Downloads page does not load): open
+    <code>https://querystudio-reports-45646.np5-gl.apaas4.claude.intranet/health</code> and
+    <code>https://querystudio-downloads-45646.np5-gl.apaas4.claude.intranet/health</code> in the browser; each must show <code>{"status": ...}</code> with no certificate warning. Then open a report, press <b>Execute</b>, and open <b>Downloads</b>: both work.</li>
+</ol>
+<p><b>If a pod's address does not open</b> (no DNS name or certificate for it yet in UAT), switch the screen back to the main API for that pod and nothing else changes: in <code>k8s/querystudioapi-helm/env/uat.yaml</code> set <code>reportsPod: enabled: false</code> (and / or <code>downloadsPod: enabled: false</code>) under <code>config:</code>, then run <code>./deploy.sh uat</code> again. Reports and downloads then work exactly as before this update.</p>
+
+<h2>4 · How it was proven</h2>
+<table>
+<tr><th>Check</th><th>Result</th></tr>
+<tr><td><b>Release check from an EMPTY rig</b> (one sequence, every group) on <code>f29d7265b</code></td><td class="ok">57 of 57 proofs passed, 1,315 checks, 0 failed</td></tr>
+<tr><td><b>Report and download pods</b> (the one change after that check: Helm charts and the UI start script) on Docker</td><td class="ok">21 of 21: a report run on the reports pod has the same 9,000 rows as on the main pod; its CSV export is listed, previewed and downloaded byte for byte on the downloads pod; delete there removes it everywhere</td></tr>
+<tr><td>The same, in the browser</td><td class="ok">20 report calls all on the reports pod, 2 Download Centre calls on the downloads pod, none refused, no CORS error</td></tr>
+<tr><td>Every report and download address the main pod has is on its own pod</td><td class="ok">103 of 103 report routes, 9 of 9 download routes</td></tr>
+<tr><td>Backend tests as CI runs them (Python 3.11, no network)</td><td class="ok">39,777 passed, 0 failed</td></tr>
+<tr><td>Frontend tests and type check</td><td class="ok">2,615 passed (390 files), 0 failed; tsc clean</td></tr>
+<tr><td>Sign-in, row security, data entitlement, Vault system accounts through the AWS portal and as ONE login (Starburst), where an SFTP account may be sent, keys</td><td class="ok">8 of 8 passed (128 checks, 4 min)</td></tr>
+<tr><td>Datasets from a role, from S3 SQL, date value lists</td><td class="ok">3 of 3 passed (32 checks, 0 min)</td></tr>
+<tr><td>Publishing reports, value lists, edge cases</td><td class="ok">3 of 3 passed (65 checks, 0 min)</td></tr>
+<tr><td>Published APIs: date filters, paging limits, the inventory (values compared with what was sent)</td><td class="ok">3 of 3 passed (110 checks, 3 min)</td></tr>
+<tr><td>Feed triggers, dependencies, on-completion, checksums, month end, the board, feeds from SQL, control files, Kafka message table, Excel onboarding</td><td class="ok">12 of 12 passed (259 checks, 49 min)</td></tr>
+<tr><td>Background jobs, jobs by output, component health, a report whose server restarts or is killed (Run again)</td><td class="ok">4 of 4 passed (193 checks, 25 min)</td></tr>
+<tr><td>Configuration release UAT to PROD, schema upgrade</td><td class="ok">2 of 2 passed (64 checks, 1 min)</td></tr>
+<tr><td>Many users at once, waiting for capacity</td><td class="ok">2 of 2 passed (15 checks, 7 min)</td></tr>
+<tr><td>Spark pods, partitioned Spark feeds, run progress</td><td class="ok">3 of 3 passed (58 checks, 11 min)</td></tr>
+<tr><td>Spark read plans (Iceberg merge-on-read, Hive)</td><td class="ok">2 of 2 passed (17 checks, 4 min)</td></tr>
+<tr><td>Starburst-like engine, second-side bindings, partition-by-key reads</td><td class="ok">3 of 3 passed (93 checks, 45 min)</td></tr>
+<tr><td>Real AWS S3: fact_tetb, cross-source, pruning, worst queries, background, S3 to S3, a new feed end to end, restatement, your shared query as 520 feeds, Athena on real AWS equal to S3 direct, your JOIN as a canvas report, report questions inside the query&#x27;s WHERE (filter at the source) equal to Trino</td><td class="ok">12 of 12 passed (281 checks, 111 min)</td></tr>
+</table>
+<p class="quiet">The design and the proof of filtering at the source: <code>docs/REPORT_SOURCE_FILTERS_2026_10_29.html</code>. The reasoning for every change is in the commit history (<code>git log d7e31dae6..4b8e9e479</code>).</p>
+</body>
+</html>
