@@ -21,12 +21,12 @@
 </style>
 </head>
 <body>
-<h1>UAT update &mdash; reports, Vault logins and the report / download pods, 2026-10-30</h1>
-<p class="quiet">Release <code>4b8e9e479</code>, tag <code>release/2026-10-30-4b8e9e479</code>. A changes-only update on top of yesterday's <code>d7e31dae6</code>.</p>
+<h1>UAT update &mdash; reports, Vault logins, the report / download pods and the app's own popups, 2026-10-30</h1>
+<p class="quiet">Release <code>e54e5f724</code>, tag <code>release/2026-10-30-e54e5f724</code>. It replaces the earlier <code>Deployment_2026_10_30_4b8e9e479.zip</code> from last night; use this one. A changes-only update on top of yesterday's <code>d7e31dae6</code>.</p>
 
 <h2>1 · Which zip</h2>
 <ul>
-  <li><b>UAT runs <code>d7e31dae6</code></b>: unzip <b><code>Deployment_2026_10_30_4b8e9e479.zip</code></b> over that source tree. It has 40 files (23 backend, 10 frontend, 6 Helm chart, 1 Spark job) and nothing to delete.</li>
+  <li><b>UAT runs <code>d7e31dae6</code></b>: unzip <b><code>Deployment_2026_10_30_e54e5f724.zip</code></b> over that source tree. It has 100 files (23 backend, 70 frontend, 6 Helm chart, 1 Spark job) and nothing to delete.</li>
   <li><b>UAT still runs <code>b012dcc99</code></b>: unzip <code>Deployment_2026_10_29_d7e31dae6.zip</code> first, then this one.</li>
 </ul>
 <p>Then rebuild the API image, the UI image and the Spark job image (one file in <code>spark/jobs/</code> changed), and run <code>./deploy.sh uat</code> from <code>k8s/querystudioapi-helm/</code> (the charts changed: run the whole script, not one chart). There are no new Python packages and nothing to configure. One database column, <code>report_parameters.source_column</code>, is added by itself on the first start.</p>
@@ -43,6 +43,7 @@
 <tr><td>SFTP logins from a System Account</td><td>The account has an <b>Allowed hosts</b> field. Its login is sent only to those SFTP servers; when an admin saves the account, QueryStudio reads each server's key and checks it on every login. A feed author who is not an admin can use the account only with those hosts; an admin can point a feed at a new host. SFTP destinations already saved and already sending the account's login keep working.</td></tr>
 <tr><td>Report and download pods now used</td><td>The reports pod and the downloads pod were installed by <code>deploy.sh</code> but the screen never called them: every report and every Download Centre request went to the main API pod. Now the screen sends report requests to <code>https://querystudio-reports-45646.np5-gl.apaas4.claude.intranet</code> and Download Centre requests to <code>https://querystudio-downloads-45646.np5-gl.apaas4.claude.intranet</code>; everything else still goes to the main API. Users see no difference except that report work no longer slows down queries on the main pod.</td></tr>
 <tr><td>Deleting a dataset</td><td>A dataset that reports are built on can no longer be deleted. The message names those reports; delete or move them first.</td></tr>
+<tr><td>Popups look like the rest of the app</td><td>Every "are you sure?", message and "please enter" popup (about 120 of them: delete, rerun, stop a run, force-start and so on) used the browser's own grey box ("...says"). They now open the app's own window, with a clear button named for the action (<b>Delete</b>, <b>Rerun</b>, <b>Run now</b>), red when it deletes. What each one asks and does is the same.</td></tr>
 <tr><td>Shared and embedded links</td><td>Offer only the values written in the query for a source question, and never show the query's SQL or table names.</td></tr>
 </table>
 
@@ -54,7 +55,8 @@
   <li>The Connections page fills the screen.</li>
   <li>A Starburst connection that uses a Vault System Account: <b>Test</b> connects.</li>
   <li>One SFTP feed that delivers with a System Account: run it once, the file arrives. Then open <b>System Accounts</b>, fill <b>Allowed hosts</b> with that server and save.</li>
-  <li>Try to delete a dataset a report uses: it is refused and names the report.</li>
+  <li>Try to delete a dataset a report uses: the app's own window asks (not the browser's grey box); press <b>Delete</b> and it is refused, naming the report.</li>
+  <li>If any popup still looks like the browser's grey box, the browser is holding the old screen: press <b>Ctrl+Shift+R</b> once.</li>
   <li><b>The two pods answer</b> (do this first if a report or the Downloads page does not load): open
     <code>https://querystudio-reports-45646.np5-gl.apaas4.claude.intranet/health</code> and
     <code>https://querystudio-downloads-45646.np5-gl.apaas4.claude.intranet/health</code> in the browser; each must show <code>{"status": ...}</code> with no certificate warning. Then open a report, press <b>Execute</b>, and open <b>Downloads</b>: both work.</li>
@@ -69,7 +71,8 @@
 <tr><td>The same, in the browser</td><td class="ok">20 report calls all on the reports pod, 2 Download Centre calls on the downloads pod, none refused, no CORS error</td></tr>
 <tr><td>Every report and download address the main pod has is on its own pod</td><td class="ok">103 of 103 report routes, 9 of 9 download routes</td></tr>
 <tr><td>Backend tests as CI runs them (Python 3.11, no network)</td><td class="ok">39,777 passed, 0 failed</td></tr>
-<tr><td>Frontend tests and type check</td><td class="ok">2,615 passed (390 files), 0 failed; tsc clean</td></tr>
+<tr><td>Frontend tests and type check (with the popups change)</td><td class="ok">2,622 passed (391 files), 0 failed; tsc clean</td></tr>
+<tr><td><b>The app's own popups</b> (frontend only, after the release check) on Docker, UI image rebuilt</td><td class="ok">In the browser: the dataset delete opens the app's window and the browser shows no box; a dataset a report uses is kept and the message names the report. A test now fails if any screen calls the browser's box again (checked by putting one back: it is named)</td></tr>
 <tr><td>Sign-in, row security, data entitlement, Vault system accounts through the AWS portal and as ONE login (Starburst), where an SFTP account may be sent, keys</td><td class="ok">8 of 8 passed (128 checks, 4 min)</td></tr>
 <tr><td>Datasets from a role, from S3 SQL, date value lists</td><td class="ok">3 of 3 passed (32 checks, 0 min)</td></tr>
 <tr><td>Publishing reports, value lists, edge cases</td><td class="ok">3 of 3 passed (65 checks, 0 min)</td></tr>
@@ -83,6 +86,6 @@
 <tr><td>Starburst-like engine, second-side bindings, partition-by-key reads</td><td class="ok">3 of 3 passed (93 checks, 45 min)</td></tr>
 <tr><td>Real AWS S3: fact_tetb, cross-source, pruning, worst queries, background, S3 to S3, a new feed end to end, restatement, your shared query as 520 feeds, Athena on real AWS equal to S3 direct, your JOIN as a canvas report, report questions inside the query&#x27;s WHERE (filter at the source) equal to Trino</td><td class="ok">12 of 12 passed (281 checks, 111 min)</td></tr>
 </table>
-<p class="quiet">The design and the proof of filtering at the source: <code>docs/REPORT_SOURCE_FILTERS_2026_10_29.html</code>. The reasoning for every change is in the commit history (<code>git log d7e31dae6..4b8e9e479</code>).</p>
+<p class="quiet">The design and the proof of filtering at the source: <code>docs/REPORT_SOURCE_FILTERS_2026_10_29.html</code>. The reasoning for every change is in the commit history (<code>git log d7e31dae6..e54e5f724</code>).</p>
 </body>
 </html>
