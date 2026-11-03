@@ -24,13 +24,13 @@
 </style>
 </head>
 <body>
-<h1>UAT update &mdash; reports, the component split (job-worker, query pods) and the new charts, 2026-11-03</h1>
-<p class="quiet">Release <code>bb3e80f1a</code>, tag <code>release/2026-11-03-bb3e80f1a</code>. A changes-only update on top of
+<h1>UAT update &mdash; reports, the component split (job-worker, query pods) and the new charts, 2026-11-03 (with the day's fixes)</h1>
+<p class="quiet">Release <code>238dec21b</code>, tag <code>release/2026-11-03-238dec21b</code>. It <b>replaces</b> this morning's <code>Deployment_2026_11_03_bb3e80f1a.zip</code> (that code plus the four fixes in section 4). A changes-only update on top of
 <code>b012dcc99</code>, the last deployment you confirmed. It contains everything since then, including the 10-29 and 10-30 zips,
 so it is correct whether or not you applied them. The user tutorial for reports is <code>docs/REPORTS_USER_TUTORIAL_2026_11_03.html</code>.</p>
 
 <h2>1 · The zip</h2>
-<p><b><code>Deployment_2026_11_03_bb3e80f1a.zip</code></b>: 495 changed or added files (248 backend, 205 frontend, 38 Helm chart,
+<p><b><code>Deployment_2026_11_03_238dec21b.zip</code></b>: 495 changed or added files (248 backend, 205 frontend, 38 Helm chart,
 3 Dockerfiles, 1 Spark job) and 13 files to delete, all in the retired <code>worker</code> chart (listed in <code>DELETED.txt</code>).
 No new Python or npm packages. Database: new tables and columns are added by themselves on the first start, and two one-time conversions run by themselves
 (see 2.6). Nothing to run by hand in the database.</p>
@@ -52,7 +52,7 @@ Follow the steps in order and nothing is left without an owner.</div>
 
 <h3>2.2 · Copy the code</h3>
 <ol>
-  <li>Unzip <code>Deployment_2026_11_03_bb3e80f1a.zip</code> over the source tree of your UAT deployment (same paths).</li>
+  <li>Unzip <code>Deployment_2026_11_03_238dec21b.zip</code> over the source tree of your UAT deployment (same paths).</li>
   <li>Delete the 13 paths in <code>DELETED.txt</code>. They are the whole <code>k8s/querystudioapi-helm/worker/</code> folder:
   <pre>rm -rf k8s/querystudioapi-helm/worker</pre></li>
   <li>If you saved your own <code>uat.yaml</code> lines, put them back now. The new file differs from the old one in these places only:
@@ -168,12 +168,24 @@ breadcrumb back. Clicking a Book ID opens its detail in a popup with every downl
 <tr><td>SQL editor "Run on"</td><td>One query run on any source, with each table mapped to that source's table.</td></tr>
 <tr><td>Delete = switch off</td><td>A deleted item can be brought back from <b>Switched Off</b>.</td></tr>
 <tr><td>Layout</td><td>The report list and the report editor use the full width of the screen; <b>Save the look</b> stays at the top of its panel.</td></tr>
+<tr><td><b>Fixed today:</b> the report header</td><td>Two tight lines instead of three: the title, its description and the buttons on one line, the
+Published / Not signed / Comments / History tags under it. No back arrow (the side menu and the browser's Back do that). The report starts higher on the screen.</td></tr>
+<tr><td><b>Fixed today:</b> "what moved" under two dates</td><td>On a report that compares two dates (for example Daily P&amp;L vs previous day), the
+"What moved the P&amp;L" and "In words" tiles said "Business Date 2026-10-29 is not in this run's result". They now show the movers, and they follow the
+two dates chosen in the band.</td></tr>
+<tr><td><b>Fixed today:</b> the P&amp;L bridge template</td><td>It proposed the total (Formal Pnl) as one of the steps, so the total was counted twice.
+The total now has its own box, <b>The total (optional)</b>, shown as the first card and never as a step.</td></tr>
+<tr><td><b>Fixed today:</b> narrow screens</td><td>On a small screen a report no longer leaves a big empty gap under its questions; each tile is as tall as its design.</td></tr>
 </table>
 
 <h2>5 · How it was proven</h2>
 <table>
 <tr><th>Check</th><th>Result</th></tr>
-<tr><td><b>Release check from an EMPTY rig</b> (one sequence, every group) on this code</td><td class="ok">79 of 79 proofs passed, about 1,950 checks, 0 failed (5 h 3 min)</td></tr>
+<tr><td><b>Release check from an EMPTY rig</b> (one sequence, every group) on <code>bb3e80f1a</code></td><td class="ok">79 of 79 proofs passed, about 1,950 checks, 0 failed (5 h 3 min)</td></tr>
+<tr><td><b>Today's four fixes</b> on Docker (images rebuilt with them), in the browser</td><td class="ok">Daily P&amp;L shows the movers and no "not in this run's result";
+the bridge proposes Formal Pnl as the total, not a step; no gap on an 800 px screen; no back arrow</td></tr>
+<tr><td>The same rig: demo reports and the 15 templates, values against Trino</td><td class="ok">20 of 20 (1,112 values); 266 of 266 (1,082 values)</td></tr>
+<tr><td>Gates on <code>238dec21b</code></td><td class="ok">backend 40,968 passed, 0 failed; tsc clean; frontend 2,949 passed, 0 failed</td></tr>
 <tr><td>Backend tests (Python 3.14)</td><td class="ok">40,979 passed (the one failure found was fixed and re-run green)</td></tr>
 <tr><td>Backend tests as CI runs them (Python 3.11, no network)</td><td class="ok">40,897 passed, 0 failed</td></tr>
 <tr><td>Frontend tests and type check</td><td class="ok">2,946 passed, 0 failed; tsc clean</td></tr>
@@ -188,6 +200,6 @@ breadcrumb back. Clicking a Book ID opens its detail in a popup with every downl
 <tr><td>Real AWS S3: fact_tetb, cross-source, pruning, worst queries, S3 to S3, new feed end to end, Athena, your JOIN canvas report, filter at the source</td><td class="ok">12 of 12</td></tr>
 </table>
 <p class="quiet">Who runs what after the split: <code>docs/COMPONENT_RESPONSIBILITIES_2026_11_02.html</code>. The reasoning for every change is in the
-commit history (<code>git log b012dcc99..bb3e80f1a</code>).</p>
+commit history (<code>git log b012dcc99..238dec21b</code>).</p>
 </body>
 </html>

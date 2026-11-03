@@ -1,0 +1,7 @@
+Deployment_2026_11_03_238dec21b: 1 parts, each under 24 MB.
+Extract EVERY part into the SAME folder; together they are the whole bundle.
+
+Deployment_2026_11_03_238dec21b.zip  5.8 MB  497 files  sha256 e9b4bc6377869c3735024f8160116c2d9cdafae2a1cb9c3d5c79d42dcd22f8f8
+    contains: DELETED.txt, Dockerfile.api, Dockerfile.published-api, Dockerfile.reports, MANIFEST.txt, backend, frontend, k8s, spark
+
+497 files in all
