@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UAT Update 2026-11-03</title>
+<style>
+  body { font-family: "Segoe UI", system-ui, sans-serif; line-height: 1.55; max-width: 1000px;
+         margin: 2rem auto; padding: 0 1rem; color: #1d1d1f; background: #fff; }
+  h1 { font-size: 1.7rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.2rem; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
+  h3 { font-size: 1.02rem; margin-top: 1.3rem; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #ddd; padding: .4rem .55rem; text-align: left; vertical-align: top; font-size: .93rem; }
+  th { background: #f6f6f6; }
+  code, pre { background: #f4f4f4; border-radius: 3px; font-size: .9em; }
+  code { padding: .1rem .3rem; }
+  pre { padding: .6rem .8rem; overflow-x: auto; white-space: pre; }
+  .ok { color: #0a6b2d; font-weight: 700; }
+  .warn { background: #fff6e0; border-left: 4px solid #e0a000; padding: .5rem .8rem; margin: .8rem 0; }
+  .quiet { color: #666; font-size: .92rem; }
+  li { margin: .3rem 0; }
+  @media (max-width: 640px) { table { display: block; overflow-x: auto; } }
+</style>
+</head>
+<body>
+<h1>UAT update &mdash; reports, the component split (job-worker, query pods) and the new charts, 2026-11-03</h1>
+<p class="quiet">Release <code>bb3e80f1a</code>, tag <code>release/2026-11-03-bb3e80f1a</code>. A changes-only update on top of
+<code>b012dcc99</code>, the last deployment you confirmed. It contains everything since then, including the 10-29 and 10-30 zips,
+so it is correct whether or not you applied them. The user tutorial for reports is <code>docs/REPORTS_USER_TUTORIAL_2026_11_03.html</code>.</p>
+
+<h2>1 · The zip</h2>
+<p><b><code>Deployment_2026_11_03_bb3e80f1a.zip</code></b>: 495 changed or added files (248 backend, 205 frontend, 38 Helm chart,
+3 Dockerfiles, 1 Spark job) and 13 files to delete, all in the retired <code>worker</code> chart (listed in <code>DELETED.txt</code>).
+No new Python or npm packages. Database: new tables and columns are added by themselves on the first start, and two one-time conversions run by themselves
+(see 2.6). Nothing to run by hand in the database.</p>
+
+<h2>2 · Deployment steps, in this order</h2>
+<div class="warn"><b>The charts changed this time.</b> The scheduler no longer runs feeds. A new <b>job-worker</b> chart replaces your
+<b>executor</b> Deployment, the old <b>worker</b> chart is removed, and a <b>query-pods</b> chart is added (it installs nothing until sizes are set).
+Follow the steps in order and nothing is left without an owner.</div>
+
+<h3>2.1 · Before you start (5 minutes)</h3>
+<ol>
+  <li><b>Take a database backup</b> (a PostgreSQL snapshot). This update changes how a paused schedule is stored. The change is safe going forward,
+  but a backup makes a rollback exact.</li>
+  <li><b>Save your own copy of <code>k8s/querystudioapi-helm/env/uat.yaml</code></b> if you edited it in UAT. The zip carries a new
+  <code>uat.yaml</code>; put your own lines back after copying (2.2). Your <code>uat.site.yaml</code> is not in the zip and is kept.</li>
+  <li>Note the name of your <b>executor</b> Deployment and Service (the one you applied from your own manifest):
+  <pre>kubectl get deploy,svc -n 45646 | grep -i -E "executor|worker"</pre></li>
+</ol>
+
+<h3>2.2 · Copy the code</h3>
+<ol>
+  <li>Unzip <code>Deployment_2026_11_03_bb3e80f1a.zip</code> over the source tree of your UAT deployment (same paths).</li>
+  <li>Delete the 13 paths in <code>DELETED.txt</code>. They are the whole <code>k8s/querystudioapi-helm/worker/</code> folder:
+  <pre>rm -rf k8s/querystudioapi-helm/worker</pre></li>
+  <li>If you saved your own <code>uat.yaml</code> lines, put them back now. The new file differs from the old one in these places only:
+    <ul>
+      <li><code>config.workerPool</code> is <b>gone</b> (the multi-pod worker pool is retired);</li>
+      <li><code>config.reportsPod.enabled: true</code> and <code>config.downloadsPod.enabled: true</code>: the screen sends report work to the
+      reports pod and Download Centre work to the downloads pod (from the 10-30 update);</li>
+      <li><code>querystudio.scheduler.worker_host: querystudio-scheduler</code> and
+      <code>querystudio.executor.worker_host: querystudio-job-worker</code>: where the API pod asks the scheduler and the job-worker about their
+      background jobs.</li>
+    </ul></li>
+</ol>
+
+<h3>2.3 · Build the images</h3>
+<table>
+<tr><th>Image</th><th>Why</th><th>Used by</th></tr>
+<tr><td><code>querystudio-api</code> (<code>Dockerfile.api</code>)</td><td>backend code, and the Dockerfile changed (folder ownership of the data volume)</td><td>api, scheduler, feed-worker, <b>job-worker</b>, query pods</td></tr>
+<tr><td><code>querystudio-reports</code> (<code>Dockerfile.reports</code>)</td><td>backend code; same Dockerfile change</td><td>reports, downloads</td></tr>
+<tr><td><code>querystudio-published-api</code> (<code>Dockerfile.published-api</code>)</td><td>backend code; same Dockerfile change</td><td>published-api</td></tr>
+<tr><td>UI image (<code>Dockerfile.ui</code>)</td><td>frontend code</td><td>ui</td></tr>
+<tr><td>Spark job image (<code>spark/</code>)</td><td><code>spark/jobs/qs_sftp_auth.py</code> changed</td><td>Spark feed pods</td></tr>
+</table>
+<p>Push them with the tag you deploy (the charts pull <code>tag: latest</code> with <code>pullPolicy: Always</code> unless your site file pins a tag).</p>
+
+<h3>2.4 · Install the charts</h3>
+<p>From <code>k8s/querystudioapi-helm/</code>:</p>
+<pre>./deploy.sh uat</pre>
+<p>Run the whole script, not one chart. It installs in this order, which is the safe order:
+<code>qs-api</code> &rarr; <code>qs-feed-worker</code> &rarr; <b><code>qs-job-worker</code></b> (new) &rarr; <code>qs-scheduler</code> &rarr;
+<b><code>qs-query-pods</code></b> (new, empty until sizes are set) &rarr; <code>qs-published-api</code> &rarr; <code>qs-reports</code> &rarr;
+<code>qs-downloads</code> &rarr; <code>qs-ui</code>. Each step waits until its pods are Ready (up to 10 minutes).</p>
+<ul>
+  <li><b>Feed-worker before the scheduler.</b> From its first start the new scheduler hands every feed run to a feed-worker pod.
+  If no feed-worker pod is running, runs wait as <i>pending</i> (Component Health says so). <code>uat.yaml</code> has <code>feedWorker.enabled: true</code>;
+  keep at least one replica.</li>
+  <li><b>Job-worker</b> runs every background job that is not a feed: scheduled reports and subscription e-mails, data-quality rules,
+  pipelines, DataFlow, custom jobs, dropdown lists, mirrors. It is the same program as your executor under its new name, port 8002, 2 replicas.
+  The old executor can stay up during the switch: both take jobs safely and only one runs the timed jobs.</li>
+  <li><b>Scheduler</b> gains a start-up probe (up to 10 minutes for a slow first start) and the permission to resize query pods
+  (<code>rbac-query-pods.yaml</code>, limited by name to query-pod Deployments).</li>
+</ul>
+
+<h3>2.5 · Remove what is retired</h3>
+<ol>
+  <li>When <code>kubectl get pods -n 45646 | grep job-worker</code> shows the job-worker pods <b>Running / Ready</b>, delete your old
+  executor Deployment and Service (the names from 2.1):
+  <pre>kubectl delete deploy &lt;your-executor-deployment&gt; -n 45646
+kubectl delete svc &lt;your-executor-service&gt; -n 45646</pre></li>
+  <li>Remove the old worker chart and its secret:
+  <pre>helm uninstall qs-worker -n 45646
+kubectl delete secret qs-worker-auth -n 45646 --ignore-not-found</pre></li>
+  <li><code>helm list -n 45646</code> now shows <code>qs-api, qs-feed-worker, qs-job-worker, qs-scheduler, qs-query-pods,
+  qs-published-api, qs-reports, qs-downloads, qs-ui</code>, and no <code>qs-worker</code>.</li>
+</ol>
+
+<h3>2.6 · What happens by itself on the first start</h3>
+<ul>
+  <li>New tables and columns are added (reports, value lists, entitlement, query pods, version pins, switched-off records).</li>
+  <li><b>Schedules:</b> "paused" gets its own column (<code>schedules.enabled</code>). Every schedule that was paused stays paused. This runs once.</li>
+  <li><b>Delete means switch off:</b> every settings table has an "active" flag, on by default. From now on, deleting a dataset, report,
+  feed, value list and so on switches it off, and it can be switched on again from <b>Switched Off</b> (admin).</li>
+  <li><b>Who may use which screen</b> is now a list of permissions per role. On day one it gives each role exactly what it had before
+  (proven on 1,443 routes &times; 7 roles: 0 differences). Nothing to set up.</li>
+</ul>
+
+<h3>2.7 · If you must roll back</h3>
+<ol>
+  <li><code>helm rollback</code> each release to its previous revision (<code>helm history qs-scheduler -n 45646</code> shows it), and
+  <code>helm uninstall qs-job-worker qs-query-pods -n 45646</code>. Re-apply your executor manifest and re-install the worker chart from the old tree.</li>
+  <li>Deploy the previous images.</li>
+  <li>Restore the database backup from 2.1. Without it the old code still starts, but it shows switched-off rows as live and
+  reads a paused schedule as running.</li>
+</ol>
+
+<h2>3 · Check after deploying (10 minutes)</h2>
+<ol>
+  <li><b>Component Health</b> is green. The feed queue consumer reads healthy (a feed-worker pod is taking runs).</li>
+  <li>The <b>scheduler log</b> at start says <code>this process is the scheduler</code> and <code>Feed queue worker NOT registered in this process</code>.</li>
+  <li>Press <b>Run now</b> on a feed. The message says <i>"Feed run queued for a feed-worker pod"</i>, the run completes, and the file arrives.
+  The feed-worker log shows the run; the scheduler log does not.</li>
+  <li>A scheduled report or a subscription e-mail sends (it now runs on the job-worker).</li>
+  <li>The two pods answer: <code>https://querystudio-reports-45646.np5-gl.apaas4.claude.intranet/health</code> and
+  <code>https://querystudio-downloads-45646.np5-gl.apaas4.claude.intranet/health</code> each show <code>{"status": ...}</code>.
+  If an address does not open, set <code>reportsPod.enabled: false</code> / <code>downloadsPod.enabled: false</code> under <code>config:</code>
+  in <code>uat.yaml</code> and run <code>./deploy.sh uat</code> again. Reports then go to the main pod as before.</li>
+  <li>Open <b>Reports &rarr; New report &rarr; From a template</b>: 15 templates are listed, including P&amp;L bridge, Statement, Limit usage,
+  Ageing and Break report.</li>
+  <li>Open any report, then <b>More &rarr; View in another theme</b>: the report redraws, and the Excel / PDF download follows the theme you picked.</li>
+  <li>Download an Excel: the file name is the report's name and the date, not a long code.</li>
+  <li>Press <b>Ctrl+Shift+R</b> once in the browser if a screen still looks like before.</li>
+</ol>
+
+<h2>4 · What changes for users</h2>
+<p class="quiet">Since <code>b012dcc99</code>. The 10-29 and 10-30 items are described in <code>docs/DEPLOYMENT_2026_10_29_UAT.html</code>
+and <code>docs/DEPLOYMENT_2026_10_30_UAT.html</code> (filter at the source, any-date questions, Vault logins as one pair, SFTP allowed hosts,
+the app's own popups, the report and download pods).</p>
+<table>
+<tr><th>Area</th><th>What users will see</th></tr>
+<tr><td>Reports on a canvas</td><td>Every report is a page of tiles: KPI cards, charts, tables, pivots, an outline (rows that open and close with totals),
+a waterfall, insight tiles ("why it changed", "biggest movers") and a header band. Clicking a bar or row filters the other tiles.</td></tr>
+<tr><td>Templates</td><td>15 report designs to start from, including the new P&amp;L bridge (a waterfall from one total to another), Statement,
+Limit usage (used / limit as a percentage), Ageing buckets and Break report.</td></tr>
+<tr><td>Themes</td><td>28 themes on seven shelves, and a Power BI theme file can be imported. Any viewer can look at a report in another theme
+without changing it for others.</td></tr>
+<tr><td>Questions (parameters)</td><td>Periods (Daily, MTD, QTD, YTD, month ends), compare two dates (COB vs previous), multi-select checkboxes,
+dropdown lists kept in the database, previous / next business day buttons, and "How this works" help on each question.</td></tr>
+<tr><td>Drill-down and popups</td><td>A chart or table goes one level deeper per click (Product area &rarr; Sub product &rarr; Desk &rarr; Book) with a
+breadcrumb back. Clicking a Book ID opens its detail in a popup with every download.</td></tr>
+<tr><td>Data version</td><td>A report can run on the latest data, a saved version, or the data as of a time, per table.</td></tr>
+<tr><td>Diagnostics</td><td>For the run on the screen: each question's value and where it was applied, how many files were read, and which engine read them.</td></tr>
+<tr><td>Shared and embedded links</td><td>Always open with every question shown and its default chosen, never as the whole report.</td></tr>
+<tr><td>Exports</td><td>Excel is one sheet per page with real Excel charts; the PDF pages look like the screen; file names are short.</td></tr>
+<tr><td>SQL editor "Run on"</td><td>One query run on any source, with each table mapped to that source's table.</td></tr>
+<tr><td>Delete = switch off</td><td>A deleted item can be brought back from <b>Switched Off</b>.</td></tr>
+<tr><td>Layout</td><td>The report list and the report editor use the full width of the screen; <b>Save the look</b> stays at the top of its panel.</td></tr>
+</table>
+
+<h2>5 · How it was proven</h2>
+<table>
+<tr><th>Check</th><th>Result</th></tr>
+<tr><td><b>Release check from an EMPTY rig</b> (one sequence, every group) on this code</td><td class="ok">79 of 79 proofs passed, about 1,950 checks, 0 failed (5 h 3 min)</td></tr>
+<tr><td>Backend tests (Python 3.14)</td><td class="ok">40,979 passed (the one failure found was fixed and re-run green)</td></tr>
+<tr><td>Backend tests as CI runs them (Python 3.11, no network)</td><td class="ok">40,897 passed, 0 failed</td></tr>
+<tr><td>Frontend tests and type check</td><td class="ok">2,946 passed, 0 failed; tsc clean</td></tr>
+<tr><td>Security: sign-in, row security, entitlement, Vault, SFTP hosts, no login configured</td><td class="ok">11 of 11</td></tr>
+<tr><td>Datasets; reports (templates 266/266 with 1,083 values, demo reports 20/20 with 1,112 values equal to Trino)</td><td class="ok">5 of 5; 6 of 6</td></tr>
+<tr><td>Canvas: outline, linked tiles, your canvas report, diagnostics, insights, every report as a canvas</td><td class="ok">7 of 7 (45,000+ values compared)</td></tr>
+<tr><td>Feeds: triggers, dependencies, month end, checksums, the board, Kafka message table, Excel onboarding</td><td class="ok">12 of 12</td></tr>
+<tr><td>Background jobs, component health, query pods (routing, edges)</td><td class="ok">8 of 8</td></tr>
+<tr><td>Published APIs; configuration release UAT &rarr; PROD, schema upgrade, switch off</td><td class="ok">3 of 3; 3 of 3</td></tr>
+<tr><td>Many users at once; Spark pods, partitioned Spark feeds, query-pod scaling and KEDA; Spark read plans</td><td class="ok">2 of 2; 5 of 5; 2 of 2</td></tr>
+<tr><td>Starburst-like engine, partition-by-key reads</td><td class="ok">3 of 3</td></tr>
+<tr><td>Real AWS S3: fact_tetb, cross-source, pruning, worst queries, S3 to S3, new feed end to end, Athena, your JOIN canvas report, filter at the source</td><td class="ok">12 of 12</td></tr>
+</table>
+<p class="quiet">Who runs what after the split: <code>docs/COMPONENT_RESPONSIBILITIES_2026_11_02.html</code>. The reasoning for every change is in the
+commit history (<code>git log b012dcc99..bb3e80f1a</code>).</p>
+</body>
+</html>
