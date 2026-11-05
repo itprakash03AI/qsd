@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AWS Portal Logins</title>
+<style>
+  :root { --bg:#fff; --fg:#1d1d1f; --line:#ddd; --head:#f6f6f6; --code:#f4f4f4; --warn:#fff6e0; --warnline:#e0a000; --wait:#666; --ok:#0a6b2d; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#1b1c1f; --fg:#e8e8ea; --line:#44464c; --head:#2a2b30; --code:#2a2b30; --warn:#3a3218; --warnline:#c79200; --wait:#a5a7ad; --ok:#6fd08f; } }
+  body { font-family:"Segoe UI",system-ui,sans-serif; line-height:1.55; max-width:1000px; margin:2rem auto; padding:0 1rem; color:var(--fg); background:var(--bg); }
+  h1 { font-size:1.7rem; margin-bottom:.2rem; }
+  h2 { font-size:1.2rem; margin-top:2rem; border-bottom:1px solid var(--line); padding-bottom:.2rem; }
+  table { border-collapse:collapse; width:100%; margin:.6rem 0; }
+  th,td { border:1px solid var(--line); padding:.4rem .55rem; text-align:left; vertical-align:top; font-size:.93rem; }
+  th { background:var(--head); }
+  code { background:var(--code); border-radius:3px; font-size:.9em; padding:.1rem .3rem; }
+  .warn { background:var(--warn); border-left:4px solid var(--warnline); padding:.5rem .8rem; margin:.8rem 0; }
+  .wait { color:var(--wait); text-align:center; }
+  .ok { color:var(--ok); font-weight:600; }
+  li { margin:.3rem 0; }
+  @media (max-width:640px) { table { display:block; overflow-x:auto; } }
+</style></head><body>
+<h1>AWS portal logins: how they work and what is proven</h1>
+<p>Status at 2026-11-05 00:40 EST, for release <code>8f8d3272a</code>. <b>The full results grid in section 4 has not run yet.</b> It starts when the CI suite finishes, at about 01:05 EST, and this page will be updated with the results.</p>
+
+<h2>1 · The recommendation for today's demo</h2>
+<p>On each S3 connection, pick your <b>Vault AD account</b> under System Account (AWS Portal). It does not depend on any person's password, so it should not depend on which pod runs the work. The grid in section 4 is what will confirm that.</p>
+
+<h2>2 · Which login a connection uses</h2>
+<table>
+<tr><th>Credential source on the form</th><th>Who logs in to the portal, in order</th><th>If nothing works</th></tr>
+<tr><td><b>Personal</b>, with nothing saved</td><td>1. The person's own password</td><td>The password window opens</td></tr>
+<tr><td><b>Personal</b>, with a username and password saved on the connection</td><td>1. The person's own password<br>2. The saved login</td><td>The password window opens</td></tr>
+<tr><td><b>System account</b> (what picking an account saves)</td><td>1. The chosen account, with its password from Vault or its own</td><td>An error naming the account. Nobody is asked.</td></tr>
+<tr><td><b>Hybrid</b></td><td>1. The person's own password<br>2. The chosen account<br>3. The saved login</td><td>The password window opens, or an error if no person is behind the run</td></tr>
+</table>
+<ul>
+<li><b>A person's password is held only in the memory of the pod they logged in on.</b> It is never written to disk. A pod restart clears it, and their session survives, so they stay logged in with no password held. That is why the window opened after your deploy.</li>
+<li><b>Admin → AWS Portal</b> supplies its values, such as the portal address, only while its Enabled switch is on. With it off, a connection needs its own address under "Override global portal settings".</li>
+<li><b>A wrong password</b> the portal refuses is not sent again for 5 minutes, so queries cannot lock an AD account. A network failure does not count, and a corrected password is tried at once.</li>
+<li><b>Old connections do not change by themselves.</b> A connection on Personal with an old account left on it stays the person's own login until someone picks an account on the form.</li>
+</ul>
+
+<h2>3 · What is already proven on Docker</h2>
+<table>
+<tr><th>Check on <code>8f8d3272a</code></th><th>Result</th></tr>
+<tr><td>Test passes on a connection with a saved login</td><td class="ok">Passed</td></tr>
+<tr><td>After a pod restart the session survives with no password held</td><td class="ok">Passed</td></tr>
+<tr><td>SQL on a connection with a saved login: no window, values match</td><td class="ok">Passed</td></tr>
+<tr><td>SQL with nothing saved: the window is asked for, naming the connection</td><td class="ok">Passed</td></tr>
+<tr><td>Window with a wrong password: refused by the portal. With the right password: works with the Admin switch off</td><td class="ok">Passed</td></tr>
+<tr><td>SQL after the window: values match</td><td class="ok">Passed</td></tr>
+<tr><td>With the switch off, the window still refuses if no portal connection is named</td><td class="ok">Passed</td></tr>
+<tr><td>A wrong saved password: at most one failed login in three queries</td><td class="ok">Passed</td></tr>
+<tr><td>A Vault account on a private connection: no window, values match</td><td class="ok">Passed</td></tr>
+</table>
+<p>All of these are through SQL on the API pod. The stand-in portal is not your real portal. Your UAT is the first real one.</p>
+
+<h2>4 · The full grid: every login through every road</h2>
+<p>Each connection gets its own file, and the values read back are compared with what was written. <b>Nothing below has run yet.</b></p>
+<table>
+<tr><th>Login</th><th>Test</th><th>Browse</th><th>SQL</th><th>Report on reports pod</th><th>Published API</th><th>Feed</th></tr>
+<tr><td>A · Personal, nothing saved</td><td class="wait">Not run</td><td class="wait">Not run</td><td class="wait">Not run</td><td class="wait">Not run</td><td class="wait">Not run</td><td class="wait">Not run</td></tr>
+<tr><td>B · Personal, login saved on the connection</td><td class="wait">Not run</td><td class="wait">Not run</td><td class="wait">Not run</td><td class="wait">Not run</td><td class="wait">Not run</td><td class="wait">Not run</td></tr>
+<tr><td>C · Vault account picked</td><td class="wait">Not run</td><td class="wait">Not run</td><td class="wait">Not run</td><td class="wait">Not run</td><td class="wait">Not run</td><td class="wait">Not run</td></tr>
+<tr><td>D · Hybrid with a Vault account</td><td class="wait">Not run</td><td class="wait">Not run</td><td class="wait">Not run</td><td class="wait">Not run</td><td class="wait">Not run</td><td class="wait">Not run</td></tr>
+<tr><td>E · Shared, Vault account</td><td class="wait">Not run</td><td class="wait">Not run</td><td class="wait">Not run</td><td class="wait">Not run</td><td class="wait">Not run</td><td class="wait">Not run</td></tr>
+</table>
+<p><b>What passing means:</b> logins B to E must work on every road. Login A may not be able to work away from the API pod, because the password is held there. If so, it must say why clearly. On no road may it return wrong values or fail without a reason.</p>
+<div class="warn"><b>Where a problem is expected:</b> login A on the report, published API and feed roads. That is the question this grid exists to answer. It is an expectation from reading the code, not a result.</div>
+
+<h2>5 · Not in this work yet</h2>
+<ul>
+<li><b>Admin → AWS Portal page tidy-up:</b> it is one long list mixing address, login, proxy and timeouts. Grouping it comes after the demo.</li>
+<li><b>CI suite:</b> running, ends at about 01:05 EST.</li>
+<li><b>Full frontend suite:</b> runs after the grid.</li>
+<li><b>Full run from empty:</b> runs after those.</li>
+</ul>
+<p>The proof is <code>scripts/docker_proof/aws_portal_every_road_proof.py</code>. The earlier checks are in <code>scripts/docker_proof/portal_password_window_proof.py</code>.</p>
+</body></html>
