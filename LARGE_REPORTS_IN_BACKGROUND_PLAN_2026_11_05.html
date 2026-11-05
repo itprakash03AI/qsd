@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Large Reports Plan</title>
+<style>
+  body { font-family: "Segoe UI", system-ui, sans-serif; line-height: 1.55; max-width: 1000px;
+         margin: 2rem auto; padding: 0 1rem; color: #1d1d1f; background: #fff; }
+  h1 { font-size: 1.7rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.2rem; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #ddd; padding: .4rem .55rem; text-align: left; vertical-align: top; font-size: .93rem; }
+  th { background: #f6f6f6; }
+  code { background: #f4f4f4; border-radius: 3px; font-size: .9em; padding: .1rem .3rem; }
+  .ask { background: #eef5ff; border-left: 4px solid #2f6fd0; padding: .5rem .8rem; margin: .8rem 0; }
+  .box { border: 1px solid #ccc; border-radius: 6px; padding: .7rem .9rem; margin: .7rem 0; background: #fafafa; }
+  li { margin: .3rem 0; }
+  @media (max-width: 640px) { table { display: block; overflow-x: auto; } }
+</style></head><body>
+<h1>Large reports: run in the background, tell the user when ready</h1>
+<p>Plan for your sign-off, 2026-11-05. Nothing here is built yet, and it is not in the bundle you are deploying.</p>
+
+<div class="ask"><b>What I need from you:</b> yes or no on the five decisions in section 6. My recommendation is next to each one.</div>
+
+<h2>1 · The idea</h2>
+<p>Before a report starts, QueryStudio works out how big it could be. If it is large, the user is told straight away that it is running in the background and that they can leave. When it finishes they get a notification that opens the finished result, with no second run. From there they can filter, sort, drill and export as usual.</p>
+<p><b>A large report runs the same way as any other report.</b> Only what the screen says and who gets told changes. If the user stays on the page, the result appears there. So a wrong estimate costs one extra message, not a wrong answer.</p>
+
+<h2>2 · What the user sees</h2>
+<div class="box"><b>On opening a large report</b><br>
+This report could read up to <b>12,728,081 rows</b> across <b>500 columns</b>, so it is running in the background.<br>
+You can leave this page. We will tell you when it is ready.<br>
+<i>[ ] Also email me when it is ready</i> &nbsp;&nbsp; [Cancel run]</div>
+<div class="box"><b>In the bell when it finishes</b><br>
+<b>P&amp;L Explain is ready</b><br>
+Business date 2024-06-28, Book = 1234. 12,728,081 rows, took 15 min 28 s.<br>
+[Open result] &nbsp; [Download CSV]</div>
+<div class="box"><b>In the bell if it fails</b><br>
+<b>P&amp;L Explain did not finish</b><br>
+Business date 2024-06-28. It stopped after 15 min: the server ran out of memory.<br>
+[Open report]</div>
+
+<h2>3 · What exists and what is missing</h2>
+<table>
+<tr><th>Need</th><th>Today</th><th>Work</th></tr>
+<tr><td>The run carries on after the user leaves</td><td><b>Works.</b> <code>execute-async</code> runs on the server and the result is stored and read by page.</td><td>None</td></tr>
+<tr><td>Row count before the run</td><td><b>Feeds only.</b> <code>core/feed_row_estimator.py</code> adds up Iceberg record counts from the cached manifests, with no S3 reads. Reports never ask it.</td><td>Ask it from the report run, narrowed by the report's partition filters</td></tr>
+<tr><td>"Running in the background" message</td><td><b>Late.</b> The viewer says it only after watching for 10 minutes.</td><td>Say it at the start when the report is large</td></tr>
+<tr><td>Notification</td><td><b>Thin.</b> <code>_notify_br_async_terminal</code> writes "X is ready" to the bell.</td><td>Add parameters, rows, time and failure reason</td></tr>
+<tr><td>Open the result from the bell</td><td><b>Missing.</b> Clicking a notification only marks it read (<code>NotificationDrawer.tsx</code>).</td><td>A link to that exact result</td></tr>
+<tr><td>Same report pressed twice</td><td><b>Not found.</b> I found no joining of a run already in progress in <code>execute-async</code>; a finished saved result can already be reused (<code>try_serve_instance</code>).</td><td>Join the run in progress</td></tr>
+<tr><td>Email</td><td><b>Partly.</b> <code>email_service.send_email</code> works. I found no email address on a user's own record.</td><td>Decide where the address comes from (decision 4)</td></tr>
+<tr><td>Download Center</td><td><b>Partly.</b> It lists files already exported (<code>download_files</code>). A stored result is not a file.</td><td>List the result there, and build the file when asked</td></tr>
+</table>
+
+<h2>4 · The rules</h2>
+<ol>
+<li><b>Large means rows &times; columns.</b> 5 million rows of 10 columns is light; 1 million rows of 500 columns is not. One setting, <code>business_reports.background_above_cells</code>, starting at 500 million cells (5M rows &times; 100 columns). Your query is 6.4 billion, so it qualifies.</li>
+<li><b>The number is "up to", never "will return".</b> Iceberg's count is before the WHERE and before any grouping, so a summary report returns far fewer rows. Partition filters narrow it first. Deleted rows are still counted, so it stays an upper limit.</li>
+<li><b>Unknown stays unknown.</b> Snowflake, Trino, Oracle and tables not in the cache have no count. The screen shows no number and never says 0. These reports get the background message after 60 seconds of running instead of 10 minutes.</li>
+<li><b>This never blocks a report.</b> Large reports still run, and nothing is cut. If the count cannot be read, the report runs as it does today.</li>
+<li><b>Pressing Run twice joins the same run.</b> Same user, report version, parameter values, row security and data version. Only an unfinished run is joined. Two different users always get separate runs, so one person's row security can never reach another.</li>
+<li><b>Only the person who ran it can open the link.</b> The link is checked on the server against the user and the report's access at the time it is opened. Forwarding it gives someone else nothing.</li>
+<li><b>Email holds no data.</b> Report name, parameters, row count and a link that needs a login. No file and no rows are attached. Parameter values are left out if decision 5 says so.</li>
+<li><b>Results expire by the existing retention.</b> If a result has been cleaned up, the link says so and offers Run again. It never shows a blank page.</li>
+<li><b>Row security does not change.</b> The run, the stored result and the download all use today's rules.</li>
+</ol>
+
+<h2>5 · Build stages</h2>
+<table>
+<tr><th>Stage</th><th>What</th><th>Proof on Docker</th></tr>
+<tr><td>1</td><td>Expected rows before the run, shown on screen; the setting; the early message, plus the 60-second one for unknown sizes</td><td>Value-by-value against the table's real count: filtered, unfiltered, unknown source</td></tr>
+<tr><td>2</td><td>Notification with the details, and the link that opens that result with no second run</td><td>Browser walk: start, leave, click the bell, result opens; prove no second query reached the engine</td></tr>
+<tr><td>3</td><td>Joining a run in progress</td><td>Two tabs give one engine run; a different user or different parameters give two</td></tr>
+<tr><td>4</td><td>Download Center entry; "Email me"</td><td>Mail arrives in the rig's mailbox with no data; a second user is refused at the link</td></tr>
+<tr><td>5</td><td>Your real shape: a 500-column, 12M-row report on S3</td><td>Start to finish in the browser on a table of that shape</td></tr>
+</table>
+<p>Stages 1 and 2 are the most visible and could ship on their own. Each stage goes through the usual review and test gates before any bundle.</p>
+<p><b>This does not make the query faster.</b> The 928 seconds is a separate problem, and I still need your log lines to find the cause. This plan makes the wait acceptable. The speed work and the option to run large reports on query pods are separate.</p>
+
+<h2>6 · Decisions for you</h2>
+<table>
+<tr><th>#</th><th>Decision</th><th>I recommend</th><th>Why</th></tr>
+<tr><td>1</td><td>The starting level for "large"</td><td><b>500 million cells</b>, changeable by an admin</td><td>Catches your wide query without flagging ordinary reports. We can tune it from UAT.</td></tr>
+<tr><td>2</td><td>Is the Download Center entry a ready-made file, or built when asked?</td><td><b>Built when asked</b></td><td>A 12M-row file costs time and disk for every run, and most people will only look on screen.</td></tr>
+<tr><td>3</td><td>Offer "Email me" to all users?</td><td><b>Yes, unticked each time</b>, and an admin can switch the option off</td><td>What you asked for, and nobody gets mail they did not ask for.</td></tr>
+<tr><td>4</td><td>Where does the user's email address come from?</td><td><b>The login directory (AD); no typed address</b></td><td>A typed address could send report details anywhere. If AD does not give one on your site, the option stays hidden and says why.</td></tr>
+<tr><td>5</td><td>Show parameter values in the email?</td><td><b>Yes in the bell, no in the email</b></td><td>Values like a book or an entity can be sensitive, and email leaves the system.</td></tr>
+</table>
+</body></html>
