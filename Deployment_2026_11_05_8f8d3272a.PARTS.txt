@@ -1,0 +1,7 @@
+Deployment_2026_11_05_8f8d3272a: 1 parts, each under 24 MB.
+Extract EVERY part into the SAME folder; together they are the whole bundle.
+
+Deployment_2026_11_05_8f8d3272a.zip  0.2 MB  9 files  sha256 d1fe46286926845c14eb4be86da989584bb4a2925e7ef8e37ab384c874f10208
+    contains: DELETED.txt, MANIFEST.txt, backend, frontend, k8s
+
+9 files in all

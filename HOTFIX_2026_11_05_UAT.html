@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UAT Hotfix 2026-11-05</title>
+<style>
+  body { font-family: "Segoe UI", system-ui, sans-serif; line-height: 1.55; max-width: 1000px;
+         margin: 2rem auto; padding: 0 1rem; color: #1d1d1f; background: #fff; }
+  h1 { font-size: 1.7rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.2rem; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #ddd; padding: .4rem .55rem; text-align: left; vertical-align: top; font-size: .93rem; }
+  th { background: #f6f6f6; }
+  code, pre { background: #f4f4f4; border-radius: 3px; font-size: .9em; }
+  code { padding: .1rem .3rem; }
+  pre { padding: .6rem .8rem; overflow-x: auto; white-space: pre; }
+  .warn { background: #fff6e0; border-left: 4px solid #e0a000; padding: .5rem .8rem; margin: .8rem 0; }
+  li { margin: .3rem 0; }
+  @media (max-width: 640px) { table { display: block; overflow-x: auto; } }
+</style></head><body>
+<h1>UAT hotfix, 2026-11-05: AWS portal login, Vault account, Report Studio</h1>
+<p>Release <code>8f8d3272a</code>, tag <code>release/2026-11-05-8f8d3272a</code>, on top of <code>456cd7380</code>.
+Zip: <code>Deployment_2026_11_05_8f8d3272a.zip</code>.</p>
+
+<div class="warn"><b>Delivered early, at your request.</b> The CI and full frontend suites were still running at delivery. Section 4 says what was and was not tested. I will report their result.</div>
+
+<h2>1 · What it fixes</h2>
+<table>
+<tr><th>Problem</th><th>Now</th></tr>
+<tr><td>The password window opened on a connection whose Test passes</td><td>A query uses the account saved on the connection, as Test does. It asks only when there is nothing else to use.</td></tr>
+<tr><td>"AWS portal authentication is not enabled" after entering the password</td><td>The window works with Admin → AWS Portal off when it is for a portal connection.</td></tr>
+<tr><td>No Vault account on a Personal S3 connection</td><td>The account picker always shows, as on Trino and Starburst. Picking an account saves the connection as "System account — no prompts". Going back to Personal clears the account.</td></tr>
+<tr><td>Keys not found again on a connection with <code>sf_ref_no</code></td><td>Saved and looked up under the same name. This mistake came from the <code>456cd7380</code> bundle.</td></tr>
+<tr><td>A wrong saved password could lock an AD account</td><td>The same username and password the portal refused are not sent again for 5 minutes, on any path. Network failures do not count. A corrected password is tried at once.</td></tr>
+<tr><td>Report Studio</td><td>On for UAT. PROD stays off. The UI chart no longer needs a ServiceAccount.</td></tr>
+</table>
+
+<h2>2 · Applying it to your own files</h2>
+<p>Seven files. Copy the four code files as they are. For the charts, apply only the lines below.</p>
+<table>
+<tr><th>File</th><th>What to do</th></tr>
+<tr><td><code>backend/api/admin_api.py</code></td><td>Copy</td></tr>
+<tr><td><code>backend/core/aws_portal_auth.py</code></td><td>Copy</td></tr>
+<tr><td><code>backend/core/credential_manager.py</code></td><td>Copy</td></tr>
+<tr><td><code>frontend/src/components/ConnectionManager.tsx</code></td><td>Copy</td></tr>
+<tr><td><code>k8s/querystudioapi-helm/env/uat.yaml</code></td><td>Set <code>reportsApp.enabled: true</code></td></tr>
+<tr><td><code>k8s/querystudioapi-helm/ui/templates/deployment.yaml</code></td><td>Not needed if you already removed <code>serviceAccountName</code></td></tr>
+<tr><td><code>k8s/querystudioapi-helm/ui/values.yaml</code></td><td>Not needed if you already removed the ServiceAccount</td></tr>
+</table>
+<p>The chart lines, if you want them:</p>
+<pre># env/uat.yaml
+reportsApp:
+  enabled: true
+
+# ui/templates/deployment.yaml, in place of the serviceAccountName line
+      {{- with .Values.serviceAccount.name }}
+      serviceAccountName: {{ . }}
+      {{- end }}
+
+# ui/values.yaml
+serviceAccount:
+  create: false
+  name: ""</pre>
+<div class="warn"><b>Keep the other charts' ServiceAccounts.</b> The API chart mounts a Vault token from its account, and Vault logins may depend on these accounts. Only the UI's is unneeded.</div>
+
+<h2>3 · Deploy</h2>
+<ol>
+<li>Build <code>querystudio-api</code>, <code>querystudio-reports</code> and <code>querystudio-published-api</code> (backend code), and the UI image (the form). No Spark image.</li>
+<li>Run <code>./deploy.sh uat</code>. It installs the new <code>qs-reports-ui</code> release.</li>
+<li>Pods restart, so a person on a Personal connection with no saved account will be asked once more. That is expected.</li>
+<li>To set your connection: Connections → Edit → System Account (AWS Portal) → pick your Vault AD account → Test → Update.</li>
+<li>Open Report Studio at <code>https://querystudio-reports-ui-45646.np5-gl.apaas4.claude.intranet</code>. To remove it: set <code>enabled: false</code> and run <code>helm uninstall qs-reports-ui -n 45646</code>.</li>
+</ol>
+
+<h2>4 · What was tested</h2>
+<table>
+<tr><th>Test on this code</th><th>Result</th></tr>
+<tr><td>Docker, your path: Test, pod restart, query, window, password with the switch off, values compared; wrong saved password; Vault account on a private connection</td><td>13 of 13 passed</td></tr>
+<tr><td>Docker: existing Vault and portal proof</td><td>12 of 12 passed</td></tr>
+<tr><td>Docker: Report Studio group</td><td>24 of 24 passed</td></tr>
+<tr><td>Browser walk of the form</td><td>Passed in full on the previous commit, with the same frontend code. Repeated on this commit: every check on the form passed, then the test could not write a picture because the file was locked, so saving was not repeated.</td></tr>
+<tr><td>Tests for this fix, and neighbouring portal, credential and chart tests</td><td>24 and 115 passed; connection form tests passed</td></tr>
+</table>
+<p><b>Not done at delivery:</b></p>
+<ul>
+<li>CI suite and full frontend suite: running.</li>
+<li>The full run from empty: restarts after them.</li>
+<li>A real AWS portal and real Vault: the tests use a stand-in portal and the test system's Vault. Your UAT is the first real one.</li>
+<li>Installing Report Studio on a real cluster: its address and certificate have only been checked by rendering the chart.</li>
+</ul>
+
+<h2>5 · If you must roll back</h2>
+<p>Restore the four code files from <code>456cd7380</code>, rebuild the images and set <code>reportsApp.enabled: false</code>. Connections saved with an account keep working on the old code.</p>
+</body></html>
