@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UAT Hotfix 2</title>
+<style>
+  body { font-family: "Segoe UI", system-ui, sans-serif; line-height: 1.55; max-width: 1000px;
+         margin: 2rem auto; padding: 0 1rem; color: #1d1d1f; background: #fff; }
+  h1 { font-size: 1.7rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.2rem; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #ddd; padding: .4rem .55rem; text-align: left; vertical-align: top; font-size: .93rem; }
+  th { background: #f6f6f6; }
+  code { background: #f4f4f4; border-radius: 3px; font-size: .9em; padding: .1rem .3rem; }
+  .warn { background: #fff6e0; border-left: 4px solid #e0a000; padding: .5rem .8rem; margin: .8rem 0; }
+  li { margin: .3rem 0; }
+  @media (max-width: 640px) { table { display: block; overflow-x: auto; } }
+</style></head><body>
+<h1>UAT hotfix 2, 2026-11-05: AWS portal logins on every road</h1>
+<p>Release <code>d8c734ddd</code>, tag <code>release/2026-11-05-d8c734ddd</code>, on top of hotfix 1 (<code>8f8d3272a</code>). Zip: <code>Deployment_2026_11_05_d8c734ddd.zip</code>. Apply hotfix 1 first if you have not.</p>
+<p>The full results are in <code>AWS_PORTAL_EVERY_ROAD_2026_11_05.html</code>.</p>
+
+<div class="warn"><b>Delivered before the CI and frontend suites finished</b>, because of today's demo. The results will follow.</div>
+
+<h2>1 · What it fixes</h2>
+<ul>
+<li><b>Feeds with a System Account</b> fail on the feed worker on hotfix 1. They now log in. Jobs on the job worker use the same fix.</li>
+<li><b>Test and browse on Personal</b> now work for a person who is logged in.</li>
+<li><b>Reports on a plain parquet table</b> now read its registered folder. Iceberg tables were not affected.</li>
+<li><b>A published API</b> says its connection could not log in, instead of "Internal server error".</li>
+<li><b>Plain words</b> replace the raw <code>auth_mode='portal' requires...</code> error.</li>
+<li><b>A wrong Snowflake key passphrase</b> always says the passphrase is wrong.</li>
+</ul>
+
+<h2>2 · Files to copy</h2>
+<p>Backend only. No chart changes and no UI image.</p>
+<table>
+<tr><th>File</th></tr>
+<tr><td><code>backend/api/connections_api.py</code></td></tr>
+<tr><td><code>backend/api/published_views_api.py</code></td></tr>
+<tr><td><code>backend/core/connection_manager.py</code></td></tr>
+<tr><td><code>backend/core/connectors/snowflake_connector.py</code></td></tr>
+<tr><td><code>backend/core/credential_manager.py</code></td></tr>
+<tr><td><code>backend/core/federation_engine.py</code></td></tr>
+<tr><td><code>backend/core/s3_storage.py</code></td></tr>
+</table>
+
+<h2>3 · Deploy</h2>
+<ol>
+<li>Build <code>querystudio-api</code>, <code>querystudio-reports</code> and <code>querystudio-published-api</code>. The api image also runs the feed worker, job worker and scheduler.</li>
+<li>Run <code>./deploy.sh uat</code>.</li>
+<li>Check: on a connection with your Vault account, run Test, browse, a SQL query, a report and one feed.</li>
+</ol>
+<p>A connection on Personal with nothing saved will ask for the password once more after the restart. It cannot run reports on the reports pod, published APIs or feeds. For those, pick a System Account on the connection.</p>
+
+<h2>4 · What was tested on this code</h2>
+<table>
+<tr><th>Test on Docker</th><th>Result</th></tr>
+<tr><td>Every login through every road: Test, browse, SQL, report on the reports pod, published API, feed</td><td>27 of 27 required checks passed; the 3 expected refusals each say why</td></tr>
+<tr><td>Your path: Test, restart, query, window, password with the switch off</td><td>13 of 13 passed</td></tr>
+<tr><td>Vault and portal proof</td><td>12 of 12 passed</td></tr>
+<tr><td>Browser walk of the connection form, including saving and reading back</td><td>Passed</td></tr>
+</table>
+<p><b>Not done at delivery:</b> the CI and full frontend suites on this code, the Report Studio group, and the full run from empty. A real AWS portal, real Vault and a real cluster are untested here.</p>
+</body></html>

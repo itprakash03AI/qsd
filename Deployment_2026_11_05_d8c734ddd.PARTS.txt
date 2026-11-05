@@ -1,0 +1,7 @@
+Deployment_2026_11_05_d8c734ddd: 1 parts, each under 24 MB.
+Extract EVERY part into the SAME folder; together they are the whole bundle.
+
+Deployment_2026_11_05_d8c734ddd.zip  0.3 MB  9 files  sha256 0865a4d9c202ae15dc37f6f61740ebf3ad3422181d3f891474e0d3763f52b728
+    contains: DELETED.txt, MANIFEST.txt, backend
+
+9 files in all
