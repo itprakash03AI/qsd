@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reports From SQL</title>
+<style>
+:root { --ink:#1b2430; --muted:#5b6675; --line:#d9dfe7; --bg:#ffffff; --panel:#f4f6f9; --accent:#1f5fa8; }
+@media (prefers-color-scheme: dark) { :root { --ink:#e6eaf0; --muted:#a3adba; --line:#364150; --bg:#141a22; --panel:#1d2530; --accent:#7db3ee; } }
+body { background:var(--bg); color:var(--ink); font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif; margin:0; }
+main { max-width:880px; margin:0 auto; padding:32px 16px 64px; }
+h1 { font-size:30px; line-height:1.2; margin:0 0 6px; }
+h2 { font-size:22px; margin:38px 0 10px; border-bottom:1px solid var(--line); padding-bottom:6px; }
+.sub { color:var(--muted); margin:0 0 20px; }
+table { border-collapse:collapse; width:100%; font-size:14.5px; margin:10px 0 16px; display:block; overflow-x:auto; }
+th,td { border:1px solid var(--line); padding:7px 9px; text-align:left; vertical-align:top; }
+th { background:var(--panel); }
+code,pre { font-family:ui-monospace,Consolas,monospace; font-size:13.5px; }
+code { background:var(--panel); padding:1px 4px; border-radius:3px; overflow-wrap:anywhere; }
+pre { background:var(--panel); padding:12px; overflow-x:auto; border-radius:5px; }
+pre code { background:none; padding:0; }
+.key { background:var(--panel); border-left:4px solid var(--accent); padding:11px 14px; margin:14px 0; }
+</style>
+</head>
+<body>
+<main>
+<h1>Setting up reports from SQL</h1>
+<p class="sub">For people who set up reports from QueryStudio's PostgreSQL database. Ready-to-run script: <code>scripts/sql/reports_from_sql.sql</code>.</p>
+
+<div class="key">You describe a report once, using names people already know, and make one SQL call. QueryStudio saves it through the same checks as the screen. You can then open, edit and share it on the screen like any other report.</div>
+
+<h2>1 · The two statements to remember</h2>
+<pre><code>SELECT qs_report_apply($spec$ { ...your report... } $spec$::jsonb, true);   -- returns a request number
+
+SELECT request_id, report_name, state, action, report_id, slug, error
+FROM qs_report_apply_status ORDER BY request_id DESC LIMIT 25;              -- what happened</code></pre>
+<table>
+<tr><th>The second value</th><th>What it does</th></tr>
+<tr><td><code>true</code></td><td><strong>A dry run.</strong> Checks every name and saves nothing. The status says "would create" or "would update".</td></tr>
+<tr><td><code>false</code></td><td>Saves the report. The status says "created" or "updated".</td></tr>
+</table>
+<p>Your request is picked up within about a minute. Until then its state is <code>pending</code>. It then becomes <code>done</code> or <code>failed</code>, and <code>error</code> says why in plain words.</p>
+<p>Keep the <code>$spec$</code> marks. They let your text hold quotes without any escaping.</p>
+
+<h2>2 · Which type do I want?</h2>
+<table>
+<tr><th>I want</th><th><code>type</code></th><th>You give</th></tr>
+<tr><td>A list of rows and columns</td><td><code>table</code></td><td><code>columns</code></td></tr>
+<tr><td>A grid: rows across columns, with totals</td><td><code>pivot</code></td><td><code>pivot</code></td></tr>
+<tr><td>My own page of numbers and charts</td><td><code>canvas</code></td><td><code>tiles</code></td></tr>
+<tr><td>A ready-made design, filled with my columns</td><td><code>template</code></td><td><code>template</code>, <code>slots</code></td></tr>
+<tr><td>A report on my own SQL, as written</td><td><code>sql</code></td><td><code>sql_file</code>, or <code>sql</code> and <code>connection</code></td></tr>
+</table>
+
+<h2>3 · Where the data comes from</h2>
+<p>The first four types read a <strong>dataset</strong>. Name one that exists:</p>
+<pre><code>"dataset": "FACT_TETB_REPORTS"</code></pre>
+<p>Or create one from a query. QueryStudio detects its columns, and later calls can reuse it by name:</p>
+<pre><code>"dataset_sql": {"name": "FACT_TETB_REPORTS", "connection": "aws-prod", "sql": "SELECT ..."}</code></pre>
+<p>Give every column a clear name with <code>AS "My Name"</code> in the query. Those are the names you use everywhere else. A date column must be a real date, not text, for the date slots of a design to accept it.</p>
+
+<h2>4 · Settings every type can use</h2>
+<table>
+<tr><th>Setting</th><th>Meaning</th><th>Example</th></tr>
+<tr><td><code>name</code></td><td>Required. Running the same name again updates that report and keeps its link.</td><td><code>"Finance - balances"</code></td></tr>
+<tr><td><code>description</code></td><td>The line under the title</td><td><code>"Balances by company."</code></td></tr>
+<tr><td><code>row_limit</code></td><td>The most rows it may return</td><td><code>100000</code></td></tr>
+<tr><td><code>theme</code></td><td>The report's look, by name</td><td><code>"Finance Blue"</code></td></tr>
+<tr><td><code>published</code></td><td><code>true</code> lets viewers open it; <code>false</code> takes it back</td><td><code>true</code></td></tr>
+<tr><td><code>parameters</code></td><td>What the person picks when running it (section 9)</td><td></td></tr>
+<tr><td><code>drill_hierarchy</code></td><td>How people drill down, top level first. At least two levels. The dataset keeps it by name, so other reports can reuse it.</td><td><code>{"name": "Company to book", "levels": ["Sap Company Code", "Source Book Code"]}</code></td></tr>
+</table>
+
+<h2>5 · A table</h2>
+<pre><code>SELECT qs_report_apply($spec$ {
+  "name": "Finance - balances by company",
+  "type": "table",
+  "dataset": "FACT_TETB_REPORTS",
+  "columns": ["Sap Company Code", "Transactional Currency", "USD Currency Amount"],
+  "order_by": [{"column": "USD Currency Amount", "direction": "desc"}],
+  "published": true
+} $spec$::jsonb, true);</code></pre>
+
+<h2>6 · A pivot</h2>
+<pre><code>SELECT qs_report_apply($spec$ {
+  "name": "Finance - pivot",
+  "type": "pivot",
+  "dataset": "FACT_TETB_REPORTS",
+  "pivot": {"rows": ["Sap Company Code"], "columns": ["Transactional Currency"],
+            "values": [{"column": "USD Currency Amount", "aggregation": "sum"}]}
+} $spec$::jsonb, true);</code></pre>
+<p><code>aggregation</code> can be <code>sum</code>, <code>avg</code>, <code>count</code>, <code>min</code>, <code>max</code> or <code>count_distinct</code>. A pivot's rows and columns must be category columns, not dates.</p>
+
+<h2>7 · A canvas: your own page</h2>
+<pre><code>SELECT qs_report_apply($spec$ {
+  "name": "Finance - my page",
+  "type": "canvas",
+  "dataset": "FACT_TETB_REPORTS",
+  "tiles": [
+    {"kind": "number", "title": "USD in all",
+     "measures": [{"column": "USD Currency Amount", "aggregation": "sum"}],
+     "layout": {"x": 0, "y": 0, "w": 4, "h": 3}},
+    {"kind": "hbar", "title": "Top 10 companies", "top_n": 10,
+     "dimensions": ["Sap Company Code"],
+     "measures": [{"column": "USD Currency Amount", "aggregation": "sum"}],
+     "layout": {"x": 0, "y": 3, "w": 8, "h": 8}}
+  ]
+} $spec$::jsonb, true);</code></pre>
+<p>The page is 12 columns wide: <code>x</code> is where a tile starts across, <code>w</code> its width, <code>y</code> where it starts down, <code>h</code> its height.</p>
+<table>
+<tr><th><code>kind</code></th><th>What it draws</th></tr>
+<tr><td><code>number</code></td><td>One big value</td></tr>
+<tr><td><code>table</code>, <code>pivot</code>, <code>heatmap</code></td><td>A summary table, a grid, a coloured grid</td></tr>
+<tr><td><code>bar</code>, <code>hbar</code>, <code>stacked_bar</code></td><td>Bars up, bars across, stacked bars</td></tr>
+<tr><td><code>line</code>, <code>area</code>, <code>stacked_area</code>, <code>combo</code></td><td>Trends</td></tr>
+<tr><td><code>pie</code>, <code>donut</code>, <code>treemap</code></td><td>Shares of a total</td></tr>
+<tr><td><code>funnel</code>, <code>waterfall</code>, <code>radar</code>, <code>scatter</code>, <code>bubble</code></td><td>Stages, a bridge, a comparison across measures, points</td></tr>
+</table>
+<p>A tile the screen would refuse is refused here too, with the same words. For the less common kinds, the easiest way to see the shape is to build one on the screen first.</p>
+
+<h2>8 · A ready-made design</h2>
+<pre><code>SELECT qs_report_apply($spec$ {
+  "name": "Finance - top N",
+  "type": "template",
+  "dataset": "FACT_TETB_REPORTS",
+  "template": "top_n_ranking",
+  "slots": {"category": ["Sap Company Code"], "amount": ["USD Currency Amount"]}
+} $spec$::jsonb, true);</code></pre>
+<p>Slots marked "if any" can be left out. A date slot needs a date column, an amount slot a number column, a category slot a text column.</p>
+<table>
+<tr><th><code>template</code></th><th>What you get</th><th><code>slots</code> (how many)</th></tr>
+<tr><td><code>financial_summary</code></td><td>Financial summary</td><td><code>date</code> 1, <code>categories</code> 1-3, <code>amounts</code> 1-4</td></tr>
+<tr><td><code>day_on_day</code></td><td>Day on day</td><td><code>date</code> 1, <code>categories</code> 1-3, <code>amounts</code> 1-3</td></tr>
+<tr><td><code>trend_over_time</code></td><td>Trend over time</td><td><code>date</code> 1, <code>categories</code> 1, <code>amounts</code> 1-2</td></tr>
+<tr><td><code>operations_dashboard</code></td><td>Operations dashboard</td><td><code>date</code> 1, <code>categories</code> 2-4, <code>amounts</code> 2-4</td></tr>
+<tr><td><code>budget_vs_actual</code></td><td>Budget vs actual</td><td><code>date</code> 1, <code>categories</code> 1-2, <code>actual</code> 1, <code>budget</code> 1</td></tr>
+<tr><td><code>top_n_ranking</code></td><td>Top N ranking</td><td><code>category</code> 1, <code>amount</code> 1</td></tr>
+<tr><td><code>mix_share</code></td><td>Mix / share</td><td><code>categories</code> 1-2, <code>amount</code> 1</td></tr>
+<tr><td><code>detail_listing</code></td><td>Detail listing</td><td><code>date</code> if any, <code>categories</code> if any, up to 4</td></tr>
+<tr><td><code>matrix_heatmap</code></td><td>Matrix heatmap</td><td><code>categories</code> 2, <code>amount</code> 1</td></tr>
+<tr><td><code>multi_page_pack</code></td><td>Multi-page pack</td><td><code>date</code> 1, <code>categories</code> 2-3, <code>amounts</code> 2-4</td></tr>
+<tr><td><code>pnl_bridge</code></td><td>P&amp;L explain bridge</td><td><code>date</code> 1, <code>categories</code> 1-2, <code>total</code> if any, <code>parts</code> 2-8</td></tr>
+<tr><td><code>statement</code></td><td>Statement with subtotals</td><td><code>date</code> 1, <code>levels</code> 2-4, <code>amounts</code> 1-4</td></tr>
+<tr><td><code>limit_usage</code></td><td>Limit usage</td><td><code>date</code> if any, <code>categories</code> 1-3, <code>usage</code> 1, <code>limit</code> 1</td></tr>
+<tr><td><code>ageing_buckets</code></td><td>Ageing buckets</td><td><code>date</code> if any, <code>bucket</code> 1, <code>owners</code> 1-2, <code>amount</code> 1</td></tr>
+<tr><td><code>break_report</code></td><td>Break report</td><td><code>date</code> if any, <code>keys</code> 1-3, <code>side_a</code> 1, <code>side_b</code> 1</td></tr>
+</table>
+<p>A design already adds its own date and category filters.</p>
+
+<h2>9 · Filters the person picks: parameters</h2>
+<pre><code>"parameters": [
+  {"name": "company", "label": "Company", "parameter_type": "multi_select",
+   "column": "Sap Company Code", "is_required": false}
+]</code></pre>
+<table>
+<tr><th>Setting</th><th>Meaning</th></tr>
+<tr><td><code>name</code>, <code>label</code></td><td>Its short name, and the words the person sees</td></tr>
+<tr><td><code>parameter_type</code></td><td><code>dropdown</code>, <code>multi_select</code>, <code>date</code>, and the other types on the screen</td></tr>
+<tr><td><code>column</code></td><td>The column whose values it offers and filters</td></tr>
+<tr><td><code>source_column</code></td><td>Instead of <code>column</code>: puts the value inside your query's own WHERE, for example <code>FACT_TETB.SYSTEM_ID</code></td></tr>
+<tr><td><code>is_required</code>, <code>default_value</code></td><td>Whether a value must be given, and what it starts with</td></tr>
+</table>
+
+<h2>10 · A report on your own SQL</h2>
+<pre><code>SELECT qs_report_apply($spec$ {
+  "name": "Finance - my own query",
+  "type": "sql",
+  "connection": "aws-prod",
+  "sql": "SELECT ... your query ..."
+} $spec$::jsonb, true);</code></pre>
+<p>This saves your query as an SQL file named like the report. To use a file already saved, give <code>"sql_file": "its name"</code> and no <code>sql</code>.</p>
+<p><strong>This type needs a database connection</strong> (Trino, Starburst, Snowflake, Oracle and so on). For a connection to S3 files, use type <code>table</code> with <code>dataset_sql</code>: it takes the same query.</p>
+
+<h2>11 · When something is refused</h2>
+<table>
+<tr><th><code>error</code> says</th><th>What to do</th></tr>
+<tr><td>This dataset has no column called 'X'. It has: ...</td><td>Copy the name from the list it gives. Capitals don't matter; spelling does.</td></tr>
+<tr><td>There is no dataset named 'X'.</td><td>Check the name, or run the <code>dataset_sql</code> call first and wait for it to finish.</td></tr>
+<tr><td>2 reports are named 'X'.</td><td>Two people own a report with that name. Rename one on the screen.</td></tr>
+<tr><td>'X' is not a report type.</td><td>Use one of the five in section 2.</td></tr>
+<tr><td>'Date' needs a date column.</td><td>Your query returns text for that column. Keep it a real date in the query.</td></tr>
+<tr><td>Still <code>pending</code> after a few minutes</td><td>Tell your administrator: the scheduler picks these up, so it may not be running.</td></tr>
+</table>
+
+<h2>12 · For administrators</h2>
+<ul>
+<li><strong>Who may run it:</strong> a request is applied with administrator rights, stamped with who asked. Grant <code>EXECUTE</code> on <code>qs_report_apply</code> to the release or DBA role only, as for <code>qs_feed_template_apply</code>.</li>
+<li><strong>Never insert into the report tables directly.</strong> That skips the checks and leaves no version history.</li>
+<li><strong>Where they appear:</strong> the function and view are created by the scheduler within a minute of the first start on the new version. The job is <code>report_requests</code> on the background jobs screen.</li>
+<li><strong>Deleting a report:</strong> on the screen. It is switched off and can be switched back on. A name held by a switched-off report can't be reused until then.</li>
+</ul>
+</main>
+</body>
+</html>

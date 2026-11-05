@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UAT Update 2026-11-04</title>
+<style>
+  body { font-family: "Segoe UI", system-ui, sans-serif; line-height: 1.55; max-width: 1000px;
+         margin: 2rem auto; padding: 0 1rem; color: #1d1d1f; background: #fff; }
+  h1 { font-size: 1.7rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.2rem; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #ddd; padding: .4rem .55rem; text-align: left; vertical-align: top; font-size: .93rem; }
+  th { background: #f6f6f6; }
+  code, pre { background: #f4f4f4; border-radius: 3px; font-size: .9em; }
+  code { padding: .1rem .3rem; }
+  pre { padding: .6rem .8rem; overflow-x: auto; white-space: pre; }
+  .warn { background: #fff6e0; border-left: 4px solid #e0a000; padding: .5rem .8rem; margin: .8rem 0; }
+  li { margin: .3rem 0; }
+  @media (max-width: 640px) { table { display: block; overflow-x: auto; } }
+</style></head><body>
+<h1>UAT update, 2026-11-04</h1>
+<p>Release <code>456cd7380</code>, tag <code>release/2026-11-04-456cd7380</code>. This goes on top of
+<code>bb3e80f1a</code>, the version you deployed. It includes every fix since then, including the
+<code>238dec21b</code> fixes that never reached UAT.</p>
+
+<div class="warn"><b>Before the demo:</b> the full test run from an empty system has not passed on this code yet.
+Section 6 says exactly what was tested and what was not.</div>
+
+<h2>1 · The zip</h2>
+<p>Use <code>Deployment_2026_11_04_456cd7380.zip</code> (2 MB, one file). It holds 85 changed or added files: 45 backend, 20 frontend, 18 Helm chart, 1 script and 1 Spark Dockerfile. Nothing needs deleting.</p>
+<p>No new Python or npm packages. New database columns add themselves on the first start. There is nothing to run by hand in the database.</p>
+
+<h2>2 · Deployment steps, in this order</h2>
+<ol>
+<li><b>Take a database backup</b> so that a rollback is exact.</li>
+<li><b>Save your own copy of <code>k8s/querystudioapi-helm/env/uat.yaml</code></b> if you edited it in UAT. Your <code>uat.site.yaml</code> is not in the zip and stays as it is.</li>
+<li><b>Unzip over the source tree</b> of your UAT deployment (same paths).</li>
+<li><b>Put your own <code>uat.yaml</code> lines back.</b> The new file differs from the old one in these places only:
+  <ul>
+  <li><code>hostPattern</code> and <code>certHostName</code>: every address now comes from these two lines. Check they match your addresses.</li>
+  <li><code>reportsApp.enabled: false</code>: the separate Reports app stays off.</li>
+  <li>One more address under <code>cors.allow_origins</code>, for the Reports app.</li>
+  </ul></li>
+<li><b>Build these images</b> and push them with the tag you deploy:
+<table>
+<tr><th>Image</th><th>Why</th></tr>
+<tr><td><code>querystudio-api</code> (<code>Dockerfile.api</code>)</td><td>Backend code</td></tr>
+<tr><td><code>querystudio-reports</code> (<code>Dockerfile.reports</code>)</td><td>Backend code</td></tr>
+<tr><td><code>querystudio-published-api</code> (<code>Dockerfile.published-api</code>)</td><td>Backend code</td></tr>
+<tr><td>UI image (<code>Dockerfile.ui</code>)</td><td>Frontend code and its start-up script</td></tr>
+</table>
+The Spark job image does not need a rebuild for this update.</li>
+<li><b>Install the charts.</b> From <code>k8s/querystudioapi-helm/</code>, run the whole script, not one chart:
+<pre>./deploy.sh uat</pre></li>
+</ol>
+
+<h2>3 · What changed for you</h2>
+<table>
+<tr><th>Area</th><th>Now</th></tr>
+<tr><td>Numbers</td><td>A whole number has no commas: <code>hierarchyid</code> shows <code>9999993</code>, not <code>9,999,993</code>. A decimal keeps its separators. Charts and number tiles keep separators. A format set on the column wins.</td></tr>
+<tr><td>Dates and text formats</td><td>Each column has a format list. The screen, PDF and Excel all follow it. A date is no longer moved a day by the browser's time zone.</td></tr>
+<tr><td>Measures and dimensions</td><td>A decimal column is a measure. A whole-number column is a dimension unless its name says it is a number, such as an amount. A number named as a key, such as <code>..._id</code>, is a dimension. A plain <code>NUMBER</code> with no scale stays a measure.</td></tr>
+<tr><td>Dataset screen</td><td>Semantic Layer has its own menu item, and analysts can see it. Column types, classes, relationships, conditions, Agg Awareness and drill hierarchies can be changed on screen. A dataset built from SQL shows its connection, and the connection can be changed.</td></tr>
+<tr><td>Connections</td><td>Only an admin can create, edit, clone, delete or share one. The buttons are hidden for everyone else, and the server refuses them as well.</td></tr>
+<tr><td>Snowflake and Vault</td><td>A connection can use a system account, and Vault can supply the whole login. The form asks for a username only when no account provides it. A Vault entry with no login is refused with a clear message.</td></tr>
+<tr><td>S3 and Vault</td><td>An S3 connection can take its access key and secret from a Vault account. Two accounts with the same Secret Ref each read their own secret. One system account on several S3 connections gets the right keys for each role.</td></tr>
+<tr><td>SSL setting</td><td>Each connection keeps its own setting after a Snowflake connection opens in the same pod. Plain "on" still honours a CA bundle your team set on the pod.</td></tr>
+<tr><td>Clear messages</td><td>A query with no connection, or a dataset with no source, now says so instead of failing on the local engine.</td></tr>
+<tr><td>Reports</td><td>Report header on two tight lines; insight under a two-dates comparison; P&amp;L bridge total; report parameters kept in a Book popup. Reports API v1 is included.</td></tr>
+<tr><td>Off unless you switch them on</td><td>The Reports app and report runs on query pods (section 5).</td></tr>
+</table>
+
+<h2>4 · What to do on your existing datasets</h2>
+<ol>
+<li>Open the dataset, go to <b>Columns</b> and press <b>Detect columns</b>. A column stored as a dimension but declared as a decimal becomes a measure and is shown again if it was hidden. The note on screen says what changed.</li>
+<li><b>A column already stored as a measure is never changed for you.</b> If it looks like a key, the note names it. Change <code>hierarchyid</code> to dimension yourself in its row, then save.</li>
+<li>Choose a date format with the format list on the column.</li>
+</ol>
+<div class="warn"><b>The <code>0024-06-28</code> date on your Snowflake view:</b> a format changes how a value looks, not the value. In Snowflake, run <code>SELECT YEAR(BUSINESS_DATE)</code>. If it returns 24, the year is already wrong in the view, usually because <code>TO_DATE(x,'DD-MON-YYYY')</code> read a two-digit year. Fix it in the view with <code>TO_DATE(x,'DD-MON-YY')</code>, or <code>CASE WHEN YEAR(d)&lt;100 THEN DATEADD(year,2000,d) ELSE d END</code>.</div>
+<p><b>Known small issue:</b> changing a column from measure to dimension and back gives it <code>sum</code>, even if it was <code>avg</code> before. Set it again if it matters.</p>
+
+<h2>5 · Optional: query pods and the Reports app</h2>
+<p>Both ship off. Leave them off for the demo unless you have already tested them. With this block off, reports run where they run today.</p>
+<pre>querystudio:
+  industrialization: {enabled: true, queue_mode: true}
+  query_pods:
+    scaler: builtin            # or keda, which needs CHECKLIST sections 1 and 2
+    reports_lane: true         # reports and report-backed APIs use the pods too
+    small_run_mb: 512          # priced under this, a run stays in the API pod
+    classes:                   # your sizes; empty means no pods
+      s: {memory_gi: 8, min: 1, max: 4, runs_per_pod: 2}</pre>
+<p>The full commented block is in <code>env/example.site.yaml</code>. The Reports app needs <code>reportsApp.enabled: true</code>.</p>
+
+<h2>6 · What was tested</h2>
+<table>
+<tr><th>Test</th><th>Result on this code</th></tr>
+<tr><td>Docker groups: security, datasets, reports, reports app, pods on every surface, Starburst</td><td>All passed</td></tr>
+<tr><td>Browser: dataset settings tabs, each edit read back after a reload</td><td>Passed</td></tr>
+<tr><td>Browser: dataset connection</td><td>Passed</td></tr>
+<tr><td>Browser: 100,000-row report</td><td>Passed: 1,180 points drawn, the table reached row 4,999 with 33 rows in the page, the far tile drew when scrolled to</td></tr>
+<tr><td>CI test suite (Python 3.11, no network)</td><td>41,071 passed, 0 failed</td></tr>
+<tr><td>Frontend type check and tests</td><td>Type check clean; 2,973 of 2,973 passed</td></tr>
+</table>
+<p><b>Not tested on this code:</b></p>
+<ul>
+<li>The full run from an empty system. It runs next, and I will report the result.</li>
+<li>A real Snowflake password login, and the decimal column case on real Snowflake. The Docker test proves Vault supplies the login and that it reaches the connection attempt; I have no working Snowflake account to finish the login.</li>
+<li>Large feeds, the AWS proofs, load and configuration releases were not rerun. Feeds ran on native and Spark at 12,600 rows only.</li>
+</ul>
+
+<h2>7 · Check after deploying (10 minutes)</h2>
+<ol>
+<li>Component Health is green.</li>
+<li>As a non-admin, the Connections page has no New, Edit, Clone or Delete buttons.</li>
+<li>Run a report with <code>hierarchyid</code>: no commas in the table. A decimal column keeps them.</li>
+<li>Choose a date format on a column, then check the screen, a PDF and an Excel export.</li>
+<li>Press <b>Detect columns</b> on a dataset with decimals and read the note.</li>
+<li>Test your Snowflake connection with its system account.</li>
+<li>Press <b>Run now</b> on a feed. It completes and the file arrives.</li>
+</ol>
+
+<h2>8 · If you must roll back</h2>
+<p><code>helm rollback</code> each release to its previous revision and deploy the previous images. New columns can stay; the old code ignores them.</p>
+</body></html>
