@@ -19,7 +19,7 @@
   @media (max-width:640px) { table { display:block; overflow-x:auto; } }
 </style></head><body>
 <h1>AWS portal logins: how they work and what is proven</h1>
-<p>Status at 2026-11-05 01:40 EST, for release <code>d8c734ddd</code> (hotfix 2). The grid in section 4 has run on this code on Docker. <b>Hotfix 1 (<code>8f8d3272a</code>) does not contain these fixes.</b> The CI and frontend suites are running on this code; see section 5.</p>
+<p>Status at 2026-11-05 01:40 EST, for release <code>d8c734ddd</code> (hotfix 2). The grid in section 4 has run on this code on Docker. <b>Hotfix 1 (<code>8f8d3272a</code>) does not contain these fixes.</b> The CI suite (41,107 passed, 0 failed) and the frontend suite (2,981 of 2,981) passed on this code.</p>
 
 <h2>1 · The recommendation for today's demo</h2>
 <p>On each S3 connection, pick your <b>Vault AD account</b> under System Account (AWS Portal). It does not depend on any person's password, and on Docker it worked on every road in section 4, with values matching. <b>This needs hotfix 2:</b> on hotfix 1, feeds with a System Account fail on the feed worker.</p>
@@ -80,8 +80,7 @@
 
 <h2>5 · Not in this work yet</h2>
 <ul>
-<li><b>CI suite and full frontend suite on this code:</b> running. The CI suite passed on hotfix 1 apart from one unrelated Snowflake message, fixed in hotfix 2.</li>
-<li><b>Full run from empty:</b> runs after those.</li>
+<li><b>Full run from empty:</b> running. It has not passed on this code yet.</li>
 <li><b>Real AWS portal, real Vault and a real cluster:</b> not tested here. Your UAT is the first.</li>
 <li><b>A Snowflake portal login on these roads:</b> this grid covers S3 connections only.</li>
 <li><b>Admin → AWS Portal page tidy-up:</b> it is one long list mixing address, login, proxy and timeouts. Grouping it comes after the demo.</li>
