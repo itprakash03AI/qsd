@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UAT Update 2026-11-06</title>
+<style>
+  body { font-family: "Segoe UI", system-ui, sans-serif; line-height: 1.55; max-width: 1000px;
+         margin: 2rem auto; padding: 0 1rem; color: #1d1d1f; background: #fff; }
+  h1 { font-size: 1.7rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.2rem; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; }
+  th, td { border: 1px solid #ddd; padding: .4rem .55rem; text-align: left; vertical-align: top; font-size: .93rem; }
+  th { background: #f6f6f6; }
+  code { background: #f4f4f4; border-radius: 3px; font-size: .9em; padding: .1rem .3rem; }
+  .warn { background: #fff6e0; border-left: 4px solid #e0a000; padding: .5rem .8rem; margin: .8rem 0; }
+  li { margin: .3rem 0; }
+  @media (max-width: 640px) { table { display: block; overflow-x: auto; } }
+</style></head><body>
+<h1>UAT update, 2026-11-06</h1>
+<p>Release <code>e3759b7d3</code>, tag <code>release/2026-11-06-e3759b7d3</code>. Zip: <code>Deployment_2026_11_06_e3759b7d3.zip</code> (2.6 MB, one file).</p>
+
+<div class="warn"><b>Do not copy the <code>k8s</code> folder if UAT already runs the 11-04 update or a later hotfix.</b>
+No chart changed since hotfix 2. The zip holds the chart files only so that it also works on a UAT still on <code>bb3e80f1a</code>. Copying them would overwrite your own edits, including the removed UI ServiceAccount.</div>
+
+<h2>1 · What is in the zip</h2>
+<p>It holds everything changed since <code>bb3e80f1a</code>, so it goes safely over 11-04, hotfix 1 or hotfix 2: 55 backend files, 41 frontend, 19 chart, 1 script and 1 Spark Dockerfile.</p>
+<p>One file must be deleted: <code>backend/core/feed_timeout_sweeper.py</code> (listed in <code>DELETED.txt</code>).</p>
+<p>Since hotfix 2 there are no new Python or npm packages and no new database columns. There is nothing to run by hand in the database.</p>
+
+<h2>2 · Deploy, in this order</h2>
+<ol>
+<li><b>Take a database backup</b> so that a rollback is exact.</li>
+<li><b>Unzip over the source tree</b> of your UAT deployment, leaving out <code>k8s</code> as above.</li>
+<li><b>Delete</b> <code>backend/core/feed_timeout_sweeper.py</code>.</li>
+<li><b>Build these images</b> and push them with the tag you deploy:
+<table>
+<tr><th>Image</th><th>Why</th></tr>
+<tr><td><code>querystudio-api</code> (<code>Dockerfile.api</code>)</td><td>Backend code. It also runs the feed worker, job worker and scheduler.</td></tr>
+<tr><td><code>querystudio-reports</code> (<code>Dockerfile.reports</code>)</td><td>Backend code</td></tr>
+<tr><td><code>querystudio-published-api</code> (<code>Dockerfile.published-api</code>)</td><td>Backend code</td></tr>
+<tr><td>UI image (<code>Dockerfile.ui</code>)</td><td>Frontend code</td></tr>
+</table>
+The Spark job image does not need a rebuild.</li>
+<li><b>Roll out the new images</b> the way you did for the hotfixes.</li>
+</ol>
+
+<h2>3 · One rule that changes what admins can do</h2>
+<div class="warn"><b>Only a Vault-based connection can now be shared.</b> Saving or granting a shared connection is refused if it holds a typed password, uses each person's own password, or uses a System Account that is not on Vault.</div>
+<ul>
+<li><b>Nothing stops running.</b> The rule applies when a connection is saved or granted. An existing connection keeps running its feeds and reports.</li>
+<li>The Connections page lists the shared connections not yet on Vault, so you can move them.</li>
+<li>A private connection may keep its own password. A connection with no password to hold, such as an IAM role, Kerberos or local, passes.</li>
+<li>To turn the rule off, set <code>secrets.shared_connection_needs_vault</code> to false.</li>
+</ul>
+
+<h2>4 · What is fixed since hotfix 2</h2>
+<table>
+<tr><th>Area</th><th>Before</th><th>Now</th></tr>
+<tr><td>Embedded reports</td><td>Every embedded report stopped at the first 1,000 rows.</td><td>It runs on all its rows, up to the embed limit of 100,000.</td></tr>
+<tr><td>Share and embed pages</td><td>A canvas report also drew a raw table of rows. A number tile under a two-dates comparison added both dates together. A multi-select in the address kept only one value.</td><td>The canvas alone, the tile shows the as-of date and its change, and every value is kept.</td></tr>
+<tr><td>Detail popup</td><td>At the lowest drill level, a Book read that value under every parent. Under a comparison the detail read both dates. Equal rows were merged.</td><td>It shows the real rows of the place you clicked, on the as-of date.</td></tr>
+<tr><td>Datasets on Snowflake and Oracle</td><td>A query wrapped around a saved SQL could ask for a column by the wrong spelling.</td><td>It asks for the name the columns really have, including in the preview and value lists. <b>Not tried on real Snowflake.</b></td></tr>
+<tr><td>Dataset wizard</td><td>Columns often came in as text, by a guess from their names, and the type could not be changed.</td><td>The server says what a column is, and the type can be changed. A number stored as text is converted when summed. <b>A value that is not a number now fails the report</b>, rather than quietly shrinking a total.</td></tr>
+<tr><td>Create Report</td><td>After saving a dataset, it went to the old screen.</td><td>It opens the canvas builder on that dataset.</td></tr>
+<tr><td>Measures</td><td>Names with <code>amt</code>, <code>notional</code>, <code>exposure</code> or <code>pnl</code> were not recognised as measures.</td><td>They are, matched as whole words.</td></tr>
+<tr><td>Long feeds</td><td>A healthy feed running over 4 hours could be marked as dead.</td><td>A run still sending its heartbeat is left alone.</td></tr>
+<tr><td>Feed engine switch</td><td>An admin's <code>native_only</code> or halt could miss the next run.</td><td>The very next run obeys it.</td></tr>
+<tr><td>Cancel</td><td>A cancel could be undone by a status update already under way.</td><td>A cancel holds.</td></tr>
+<tr><td>Pod start</td><td>Each start locked <code>feed_runs</code> and pods starting together could deadlock.</td><td>Neither happens. The full run had no deadlocks in the database log.</td></tr>
+<tr><td>Query screen</td><td>On a 1366x768 screen the results had 259 px. "No partition filter" could show even when the WHERE had every partition column.</td><td>The results have 384 px. The message reads the actual statement.</td></tr>
+</table>
+
+<h2>5 · What was tested on this code</h2>
+<table>
+<tr><th>Test</th><th>Result</th></tr>
+<tr><td>Full run from an empty system, on Docker</td><td><b>89 groups passed, 0 failed</b>, 316 minutes</td></tr>
+<tr><td>CI test suite (Python 3.11, no network)</td><td>41,170 passed, 0 failed, 232 skipped</td></tr>
+<tr><td>Frontend type check and tests</td><td>Type check clean; 3,023 of 3,023 passed</td></tr>
+<tr><td>Browser walks with values checked against Trino</td><td>6 of 6: Book popup, drill popup, field names, wizard and Create Report, embed and share totals, embedded comparison</td></tr>
+</table>
+<p>These ran on <code>73431aaa4</code>. The release adds only one results line in a document, and the zip was compared with the commit, file by file.</p>
+<p><b>Not tested, because my rig has only stand-ins:</b> real Snowflake, Kafka, Oracle, Starburst and Hive, your Vault, your AWS portal, your Spark image and your SFTP servers. UAT is the first real test of these.</p>
+
+<h2>6 · Known and not in this update</h2>
+<ul>
+<li><b>A published API on Snowflake</b> is reported failing. It is not fixed, because the cause is not known yet. I need the exact error text and whether it is a SQL API or a report API.</li>
+<li><b>New embed options are not in this zip:</b> the Embedding sites screen, fixed values and other options per link, and detail popups on an embed. They follow in a later update.</li>
+<li><b>A summed whole number in a CSV</b> downloads as <code>1000.0</code>.</li>
+<li><b>A linked-tile filter</b> does not narrow a popup's detail unless the action maps it. The popup says so.</li>
+<li><b>Some exports and admin actions</b> were not reaching the audit log. The fix is in the later update.</li>
+</ul>
+
+<h2>7 · Check after deploying (15 minutes)</h2>
+<ol>
+<li>Component Health is green.</li>
+<li>On the Connections page, read the list of shared connections not yet on Vault.</li>
+<li>Open a dataset built on Snowflake SQL, preview it, and run a report on it.</li>
+<li>Embed a report with more than 1,000 rows and check the row count.</li>
+<li>On an embed or share link with a two-dates comparison, check a number tile against the report.</li>
+<li>Click a Book or a drill level and check that the popup's rows belong to it.</li>
+<li>Press <b>Run now</b> on a feed. It completes and the file arrives.</li>
+</ol>
+
+<h2>8 · If you must roll back</h2>
+<p>Deploy the previous images, or use <code>helm rollback</code> if the deployment changed through Helm. No new columns came with this update, so the database needs no change.</p>
+</body></html>
